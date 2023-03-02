@@ -13,143 +13,13 @@ output: pdf_document
 
 **Assignment 1**
 
-**IMPORTANT INFORMATION ABOUT THE ASSIGNMENT**
-
-**In this paragraph, we summarize the essential information about this
-assignment. The format and rules for this assignment are different from
-your other courses, so please pay attention.**
-
-**1) Deadline: The deadline for submitting your solutions to this
-assignment is the 6 March 12:00 noon Edinburgh time.**
-
-**2) Format: You will need to submit your work as 2 components: a PDF
-report, and your R Markdown (.Rmd) notebook. There will be two separate
-submission systems on Learn: Gradescope for the report in PDF format,
-and a Learn assignment for the code in Rmd format. You need to write
-your solutions into this R Markdown notebook (code in R chunks and
-explanations in Markdown chunks), and then select Knit/Knit to PDF in
-RStudio to create a PDF report.**
-
-![](knit_to_PDF.jpg){width="192"}
-
-**The compiled PDF needs to contain everything in this notebook, with
-your code sections clearly visible (not hidden), and the output of your
-code included. Reports without the code displayed in the PDF, or without
-the output of your code included in the PDF will be marked as 0, with
-the only feedback "Report did not meet submission requirements".**
-
-**You need to upload this PDF in Gradescope submission system, and your
-Rmd file in the Learn assignment submission system. You will be required
-to tag every sub question on Gradescope.**
-
-**Some key points that are different from other courses:**
-
-**a) Your report needs to contain written explanation for each question
-that you solve, and some numbers or plots showing your results.
-Solutions without written explanation that clearly demonstrates that you
-understand what you are doing will be marked as 0 irrespectively whether
-the numerics are correct or not.**
-
-**b) Your code has to be possible to run for all questions by the Run
-All in RStudio, and reproduce all of the numerics and plots in your
-report (up to some small randomness due to stochasticity of Monte Carlo
-simulations). The parts of the report that contain material that is not
-reproduced by the code will not be marked (i.e. the score will be 0),
-and the only feedback in this case will be that the results are not
-reproducible from the code.**
-
-![](run_all.jpg){width="375"}
-
-**c) Multiple Submissions are allowed BEFORE THE DEADLINE are allowed
-for both the report, and the code.\
-However, multiple submissions are NOT ALLOWED AFTER THE DEADLINE.\
-YOU WILL NOT BE ABLE TO MAKE ANY CHANGES TO YOUR SUBMISSION AFTER THE
-DEADLINE.\
-Nevertheless, if you did not submit anything before the deadline, then
-you can still submit your work after the deadline, but late penalties
-will apply. The timing of the late penalties will be determined by the
-time you have submitted BOTH the report, and the code (i.e. whichever
-was submitted later counts).**
-
-**We illustrate these rules by some examples:**
-
-**Alice has spent a lot of time and effort on her assignment for BDA.
-Unfortunately she has accidentally introduced a typo in her code in the
-first question, and it did not run using Run All in RStudio. - Alice
-will get 0 for the whole assignment, with the only feedback "Results are
-not reproducible from the code".**
-
-**Bob has spent a lot of time and effort on his assignment for BDA.
-Unfortunately he forgot to submit his code. - Bob will get no personal
-reminder to submit his code. Bob will get 0 for the whole assignment,
-with the only feedback "Results are not reproducible from the code, as
-the code was not submitted."**
-
-**Charles has spent a lot of time and effort on his assignment for BDA.
-He has submitted both his code and report in the correct formats.
-However, he did not include any explanations in the report. Charles will
-get 0 for the whole assignment, with the only feedback "Explanation is
-missing."**
-
-**Denise has spent a lot of time and effort on her assignment for BDA.
-She has submitted her report in the correct format, but thought that she
-can include her code as a link in the report, and upload it online (such
-as Github, or Dropbox). - Denise will get 0 for the whole assignment,
-with the only feedback "Code was not uploaded on Learn."**
-
-**3) Group work: This is an INDIVIDUAL ASSIGNMENT, like a 2 week exam
-for the course. Communication between students about the assignment
-questions is not permitted. Students who submit work that has not been
-done individually will be reported for Academic Misconduct, that can
-lead to serious consequences. Each problem will be marked by a single
-instructor, so we will be able to spot students who copy.**
-
-**4) Piazza: During the periods of the assignments, the instructor will
-change Piazza to allow messaging the instructors only, i.e. students
-will not see each others messages and replies.**
-
-**Only questions regarding clarification of the statement of the
-problems will be answered by the instructors. The instructors will not
-give you any information related to the solution of the problems, such
-questions will be simply answered as "This is not about the statement of
-the problem so we cannot answer your question."**
-
-**THE INSTRUCTORS ARE NOT GOING TO DEBUG YOUR CODE, AND YOU ARE ASSESSED
-ON YOUR ABILITY TO RESOLVE ANY CODING OR TECHNICAL DIFFICULTIES THAT YOU
-ENCOUNTER ON YOUR OWN.**
-
-**5) Office hours: There will be two office hours per week (Monday
-14:00-15:00, and Wednesdays 15:00-16:00) during the 2 weeks for this
-assignment. The links are available on Learn / Course Information. I
-will be happy to discuss the course/workshop materials. However, I will
-only answer questions about the assignment that require clarifying the
-statement of the problems, and will not give you any information about
-the solutions. Students who ask for feedback on their assignment
-solutions during office hours will be removed from the meeting.**
-
-**6) Late submissions and extensions: NO EXTENSIONS ARE ALLOWED FOR THIS
-ASSIGNMENT, AND THERE IS NO SUCH OPTION PROVIDED IN THE ESC SYSTEM.
-Students who have existing Learning Adjustments in Euclid will be
-allowed to have the same adjustments applied to this course as well, but
-they need to apply for this BEFORE THE DEADLINE on the website**
-
-<https://www.ed.ac.uk/student-administration/extensions-special-circumstances>
-
-**by clicking on "Access your learning adjustment". This will be
-approved automatically.**
-
-**Students who submit their work late will have late submission
-penalties applied by the ESC team automatically (this means that even if
-you are 1 second late because of your internet connection was slow, the
-penalties will still apply). The penalties are 5% of the total mark
-deduced for every day of delay started (i.e. one minute of delay counts
-for 1 day). The course instructors do not have any role in setting these
-penalties, we will not be able to change them.**
-
 ```{r}
 rm(list = ls(all = TRUE))
 #Do not delete this!
 #It clears all variables to ensure reproducibility
+library(dbplyr)
+library(tidyverse)
+library(rjags)
 ```
 
 ![](Exchange-rate.jpg)
@@ -162,6 +32,7 @@ exchange rates of 24 currencies versus the EUR, from 2000-01-03 until
 2012-04-04.**
 
 ```{r}
+set.seed(1234)
 require(stochvol)
 data("exrates")
 
@@ -207,17 +78,59 @@ hyperparameters (you need to choose burn-in and number of steps
 appropriately for this).**
 
 
-
-\textcolor{red}{remember to centre the data} 
-
+## Data exploration
+First, we extract the first 3 months of USD/EUR data from the dataset, and insert new entries to where the data is missing with NA in order to include all dates from 2000-01-03 until 2000-04-02. Then we create a response variable y by storing the logarithm of the USD/EUR exchange rate estimate for each day, with NA if they are missing. Below is the plot of the response variable y we just created. We see there is a decreasing trend with some fluctuations. 
 ```{r}
-plot(eur2usd.centred)
+# Create data input for JAGS
+eur2usd <- exrates %>% 
+  filter(date <= "2000/04/02") %>%
+  mutate(date=as.numeric(date)) %>%
+  select(USD,date) %>%
+  mutate(date=date-date[1]+1,USD=log(USD))
+
+n <- eur2usd$date[length(eur2usd$date)]
+y <- rep(NA,n)
+j <- 1
+for(i in eur2usd$date){
+  y[i] <- eur2usd$USD[j]
+  j <- j+1
+}
+#y <- y-mean(y,na.rm = TRUE)
+plot(y)
 ```
 
-```{r}
-set.seed(1234)
-```
+## Leverage Stochastic Volatility model
+Let $\boldsymbol{\theta}$ denote the parameter set, $\boldsymbol{\theta}=\{\beta_0, \beta_1, \phi,\rho,\sigma\}$. Since $\epsilon_t$ and $\eta_t$ given $\boldsymbol{\theta}$ are jointly Gaussian, $y_t$ and $h_{t+1}$ given $h_t$ and $\boldsymbol{\theta}$ are also jointly Gaussian with mean and covariance matrix given below due to the linearity.
+$$
+\left(\begin{matrix} y_t \\ h_{t+1} \end{matrix}\right)\bigg|_{h_t,y_{t-1},\boldsymbol{\theta}} \sim \mathcal{N} \left( \left[ \begin{matrix} \beta_0+\beta_1y_{t-1} \\ mu+\phi(h_t-\mu) \end{matrix} \right] , \left[ \begin{matrix} \exp(h_t) & \sigma \rho \exp(\frac{h_t}{2})\\\sigma \rho \exp(\frac{h_t}{2})& \sigma^2 \end{matrix} \right] \right)
+$$
+By conditioning, the leverage stochastic volatility model can be rewritten as 
+$$
+h_{t+1} | \boldsymbol{\theta} \sim \mathcal{N}(\mu+\phi(h_t-\mu),\sigma^2) \\
 
+y_t|h_{t+1},h_{t},y_{t-1},\boldsymbol{\theta} \sim \mathcal{N} \left(\beta_0+\beta_1y_{t-1}+\exp(\frac{h_t}{2})(h_{t+1}-\mu-\phi(h_t-\mu)),(1-\rho^2)\exp(h_t)\right) 
+
+$$
+### Prior specification
+$\beta_0,\beta_1$: For coefficients $\beta_0$ and $\beta_1$, it is natural to set the Normal prior on it. As we do not have much prior belief, large variances are suggested. $\beta_0 \sim \mathcal{N}(0,1000)$. $\beta_1 \sim \mathcal{N}(0,1000)$
+
+$\mu$: A vague with mean $0$ and large variance (e.g.$1000$) is used for $\mu$, $\mu \sim \mathcal {N} (0,1000)$.
+
+$\phi$: As it is necessary to have $\phi \in (-1,1)$ for stability, a prior that ranges from $-1$ to $1$ is needed. A Beta prior has been widely used for parameters ranging from $0$ to $1$. If we put a Beta prior on $\frac{\phi+1}{2}$, we then have $0<\frac{\phi+1}{2}<1$. Consequently, $-1<\phi<1$ is ensured. Therefore, the prior for $\phi$ is chosen to be $\frac{\phi+1}{2} \sim \text{Beta} (1,1)$.
+
+$\sigma$: $\sigma \sim \text{Gamma} (0, 1000)$
+
+$\rho$: An uninformative prior is used for $\rho$. In particular sine $\rho\in [-1,1]$, we use $\rho \sim \text{Uniform} (-1,1)$.
+
+
+
+We have implemented the model in JAGS as shown below. The hidden states are stored in the vector $h$, and the observations are stored in the vector $y$. We pass
+along $y$ created above to JAGS as $y$ when compiling the model. In
+this $y$ variable (which is a vector of length $n$), remember that we have already set all the points with missing data as NA. JAGS is able to handle these NA values
+automatically by creating stochastic nodes for them (and we could even
+obtain MCMC samples from them). We ran $5$ chains with $50000$ samples after
+$20000$ burn-in iterations, starting from an initial position for $y$ based
+on the true observation of $y_1$ and some random noise.
 
 ```{r}
 #model in BUGS syntax
@@ -226,7 +139,8 @@ model_string <- "model {
   beta0 ~ dnorm(beta.mu.0, beta.tau.0)
   beta1 ~ dnorm(beta.mu.1, beta.tau.1)
   mu ~ dnorm(mu.mu,mu.tau)
-  phi ~ dbeta(1,1)
+  trans_phi ~ dbeta(20,1.5)
+  phi <- 2*trans_phi-1
   tau ~ dgamma(sigma.a,sigma.b)
   sigma <- pow(tau,-2)
   rho ~ dunif(-1,1)
@@ -247,7 +161,7 @@ model_string <- "model {
   }
   
 
-  
+
 }"
 ```
 
@@ -267,16 +181,13 @@ for(i in eur2usd$date){
   y[i] <- eur2usd$USD[j]
   j <- j+1
 }
-y <- y-mean(y,na.rm = TRUE)
-#eur2usd_data <- data.frame(USD=rep(NA,eur2usd$date[length(eur2usd$date)],
-#                           date=1:length(eur2usd$date))
-  
-eur2usd.centred <- eur2usd %>% 
-  mutate(date=date-mean(date),USD=mean(USD))
 
 n <- length(eur2usd)
 
-eur2usd.data <- list(n=n,y=y,mean.y0=0,prec.y0=0.001,beta.mu.0=0,beta.tau.0=0.001,beta.mu.1=0,beta.tau.1=0.001,mu.mu=0,mu.tau=0.001,sigma.a=0.01,sigma.b=0.01)
+eur2usd.data <- list(n=n,y=y,mean.y0=y[1],prec.y0=0.001,
+                     beta.mu.0=0,beta.tau.0=0.001,
+                     beta.mu.1=0,beta.tau.1=0.001,
+                     mu.mu=0,mu.tau=0.001,sigma.a=0.001,sigma.b=0.001)
 
 
 model1.inits=list()
@@ -303,17 +214,41 @@ model1 <- jags.model(file=textConnection(model_string),
                         data=eur2usd.data,
                         n.chains=num.chains)
 # Burnin for 20000 samples
-update(model1,80000,progress.bar="none")
+update(model1,50000,progress.bar="none")
 ```
-
+Explanation: We printed out the posterior summaries for the
+model parameters beta0, beta1, mu, phi, rho, and sigma using the `summary(res.model1)`
+command. \textcolor{red}{We can see that the standard deviations are typically much
+smaller than the means in absolute value, indicating that the the amount
+of data is sufficient to fit the model parameters with some degree of
+confidence.} The time series SE is smaller than the posterior means
+(in absolute value), showing that our estimates are relatively accurate. The trace plots of each parameter show that the chains were mixing well.
 
 ```{r}
 # Running the model, monitoring the variable theta
-res.model1=coda.samples(model1,variable.names=c("beta0", "beta1", "mu", "phi", "sigma", "rho"), n.iter=10000,progress.bar="none")
+res.model1=coda.samples(model1,variable.names=c("beta0", "beta1", "mu", "phi", "sigma", "rho"), n.iter=50000,progress.bar="none")
 
 #Setting margins to be small
 summary(res.model1); plot(res.model1)
 effectiveSize(res.model1)
+```
+
+Explanation: We plotted the autocorrelation functions for the 4
+components of A using the acf function. We set the lag.max parameter to
+1000 to clearly display the plots. We can see that the samples from
+mu suffer from the most autocorrelation, but it is mostly gone after
+a lag of 100, and almost completely gone after a lag of 300.
+```{r}
+par(mar = c(2, 2, 4, 2))
+acf(res.model1[[1]][,"beta0"],lag.max=1000,main="ACF for beta0")
+acf(res.model1[[1]][,"beta1"],lag.max=1000,main="ACF for beta1")
+acf(res.model1[[1]][,"mu"],lag.max=5000,main="ACF for mu")
+acf(res.model1[[1]][,"phi"],lag.max=1000,main="ACF for phi")
+acf(res.model1[[1]][,"rho"],lag.max=1000,main="ACF for rho")
+```
+
+```{r}
+dic.samples(model1,n.iter=10000)
 ```
 
 ```{r}
@@ -321,6 +256,7 @@ effectiveSize(res.model1)
 gelman.diag(res.model1)
 
 ```
+
 ```{r}
 gelman.plot(res.model1)
 ```
@@ -330,8 +266,6 @@ effectiveSize(res.model1)
 ```
 
 
-
-Explanation: (Write your explanation here)
 
 **b)[10 marks] In practice, one often encounters outliers in exchange
 rates. These can be sometimes modeled by assuming Student's t
@@ -355,9 +289,44 @@ the results, and discuss them.**
 hyperparameters (you need to choose burn-in and number of steps
 appropriately for this).**
 
-```{r}
+$$
+y_t \sim \mathcal{N} (\beta_0+\beta_1y_{t-1}, \exp(h_t))
+$$
 
+```{r}
+#model in BUGS syntax
+model_string <- "model {
+  # prior
+  beta0 ~ dnorm(beta.mu.0, beta.tau.0)
+  beta1 ~ dnorm(beta.mu.1, beta.tau.1)
+  mu ~ dnorm(mu.mu,mu.tau)
+  trans_phi ~ dbeta(20,1.5)
+  phi <- 2*trans_phi-1
+  tau ~ dgamma(sigma.a,sigma.b)
+  sigma <- pow(tau,-2)
+  rho ~ dunif(-1,1)
+  
+  # Likelihood
+  h[1] ~ dnorm(mu, (1-phi^2)*tau)
+  #The evolution of the hidden states x according to the model
+  for(i in 2:(n+1)) {
+    h[i] ~ dnorm(mu+phi*(h[i-1]-mu), tau) 
+  }
+  
+  y[1] ~ dt(mean.y0, sigma2.y0,k)
+  k ~ dchisq(8,)
+  y.var[1] <- pow(prec.y0,-1)
+  for(i in 2:n) {
+    y.mu[i] <- rho/sigma*exp(h[i]/2)*(h[i+1]-mu-phi*(h[i]-mu))+beta0 + beta1*y[i-1]
+    y.var[i] <- exp(h[i])*(1-pow(rho,2)) + beta1^2*y.var[i-1]
+    y[i] ~ dnorm(y.mu[i], pow(y.var[i],-1))
+  }
+  
+
+
+}"
 ```
+
 
 Explanation: (Write your explanation here)
 
