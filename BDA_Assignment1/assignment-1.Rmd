@@ -355,7 +355,7 @@ model2_string <- "model {
 ```
 
 ```{r}
-#model in BUGS syntax
+#model in BUGS syntax 14:17
 model2_string <- "model {
   # prior
   beta0 ~ dnorm(beta.mu.0, beta.tau.0)
@@ -373,17 +373,17 @@ model2_string <- "model {
   #The evolution of the hidden states x according to the model
   for(i in 2:(n+1)) {
     eta[i] ~ dnorm(0,1)
-    h[i] <- mu+phi*(h[i-1]-mu)+sigma*eta[i]
+    h[i] ~ dnorm(mu+phi*(h[i-1]-mu), tau)
   }
   
   
   y.mu[1] <- 0.5
   y.tau[1] <- exp(-h[1])
-  y[1] ~ dt(y.mu[1], y.tau[1], k) T(0,10)
+  y[1] ~ dt(y.mu[1], y.tau[1], k) 
   for(i in 2:n) {
     y.mu[i] <- rho*eta[i]*exp(h[i]/2) + beta0 + beta1*y[i-1]
     y.tau[i] <- exp(-h[i])
-    y[i] ~ dt(y.mu[i], y.tau[i],k)T(0,10)
+    y[i] ~ dt(y.mu[i], y.tau[i],k)
   }
   
 
@@ -394,18 +394,38 @@ eur2usd.data2 <- list(n=n,y=y,
                      beta.mu.0=0,beta.tau.0=0.001,
                      beta.mu.1=0,beta.tau.1=0.001,
                      mu.mu=0,mu.tau=0.001,
-                     sigma.a=0.001,sigma.b=0.001)
+                     sigma.a=1,sigma.b=1)
 
 
 num.chains <- 5
 # Compile and run the model
-model1 <- jags.model(file=textConnection(model2_string), 
+model2 <- jags.model(file=textConnection(model2_string), 
                         data=eur2usd.data2,
                         n.chains=num.chains)
 # Burnin for 20000 samples
-update(model1,10000)
+update(model2,10000)
 
 ```
+
+```{r}
+# Running the model, monitoring the variable theta
+res.model2=coda.samples(model2,variable.names=c("beta0", "beta1", "mu", "phi", "sigma", "rho", "k"), n.iter=50000,progress.bar="none")
+
+#Setting margins to be small
+summary(res.model2); effectiveSize(res.model2);
+plot(res.model2)
+```
+```{r}
+par(mfrow = c(3,2))
+acf(res.model2[[1]][,"beta0"],lag.max=1000,main="ACF for beta0")
+acf(res.model2[[1]][,"beta1"],lag.max=1000,main="ACF for beta1")
+acf(res.model2[[1]][,"mu"],lag.max=5000,main="ACF for mu")
+acf(res.model2[[1]][,"phi"],lag.max=1000,main="ACF for phi")
+acf(res.model2[[1]][,"rho"],lag.max=1000,main="ACF for rho")
+acf(res.model2[[1]][,"sigma"],lag.max=1000,main="ACF for sigma")
+
+```
+
 
 Explanation: (Write your explanation here)
 
@@ -414,12 +434,13 @@ Explanation: (Write your explanation here)
 **Perform posterior predictive checks on both models a) and b). Explain
 how did you choose the test functions.**
 
-**Discuss the results.** ##\# Posterior predictive checks for (a)
+**Discuss the results.** 
+### Posterior predictive checks for (a)
 
 ```{r}
 #model in BUGS syntax
 
-model_string <- "model {
+model1_string <- "model {
   # prior
   beta0 ~ dnorm(beta.mu.0, beta.tau.0)
   beta1 ~ dnorm(beta.mu.1, beta.tau.1)
@@ -455,7 +476,7 @@ model_string <- "model {
 ```{r}
 num.chains <- 5
 # Compile and run the model
-model1_check <- jags.model(file=textConnection(model_string), 
+model1_check <- jags.model(file=textConnection(model1_string), 
                         data=eur2usd.data,
                         n.chains=num.chains)
 # Burnin for 20000 samples
@@ -464,36 +485,133 @@ update(model1_check,50000)
 
 ```{r}
 # Running the model, monitoring the variable theta
-res.model1_check=coda.samples(model1_check,variable.names=c("y_rep"), n.iter=60000,progress.bar="none")
+res.model1_check=coda.samples(model1_check,variable.names=c("y_rep"), n.iter=50000,progress.bar="none")
 
 #Setting margins to be small
-summary(res.model1_check); effectiveSize(res.model1_check);
+#summary(res.model1_check); effectiveSize(res.model1_check);
 
 ```
 
 ```{r}
-yrep=res.model1_check[[1]]
-yrepmin=apply(yrep,1,min)
-hist(yrepmin,col="gray40") 
+y1rep=res.model1_check[[1]]
+y1repmin=apply(y1rep,1,min)
+hist(y1repmin,col="gray40") 
 abline(v=min(y,na.rm = TRUE),col="red",lwd=2)
 ```
 
 ```{r}
 
-yrepmax=apply(yrep,1,min)
-hist(yrepmax,col="gray40") 
+y1repmax=apply(y1rep,1,max)
+hist(y1repmax,col="gray40") 
 abline(v=max(y,na.rm = TRUE),col="red",lwd=2)
 
 ```
 
 ```{r}
 
-yrep=res.model1_check[[1]]
-yrepmean=apply(yrep,1,mean)
-hist(yrepmean,col="gray40") 
+y1rep=res.model1_check[[1]]
+y1repmedian=apply(y1rep,1,median)
+hist(y1repmedian,col="gray40") 
+abline(v=median(y,na.rm = TRUE),col="red",lwd=2)
+
+```
+```{r}
+
+y1rep=res.model1_check[[1]]
+y1repmean=apply(y1rep,1,mean)
+hist(y1repmean,col="gray40") 
 abline(v=mean(y,na.rm = TRUE),col="red",lwd=2)
 
 ```
+```{r}
+## Plot posterior predictive 
+for (i in length(y)){
+  y1rep[]
+}
+
+```
+
+### Posterior check for (b)
+```{r}
+#model in BUGS syntax 14:17
+model2_string <- "model {
+  # prior
+  beta0 ~ dnorm(beta.mu.0, beta.tau.0)
+  beta1 ~ dnorm(beta.mu.1, beta.tau.1)
+  mu ~ dnorm(mu.mu,mu.tau)
+  trans_phi ~ dbeta(18,1.5)
+  phi <- 2*trans_phi-1
+  tau ~ dgamma(sigma.a,sigma.b)
+  sigma <- pow(tau,-2)
+  rho ~ dunif(-1,1)
+  k ~ dchisq(8) 
+  
+  # Likelihood
+  h[1] ~ dnorm(mu, (1-phi^2)*tau)
+  #The evolution of the hidden states x according to the model
+  for(i in 2:(n+1)) {
+    eta[i] ~ dnorm(0,1)
+    h[i] ~ dnorm(mu+phi*(h[i-1]-mu), tau)
+  }
+  
+  
+  y.mu[1] <- 0.5
+  y.tau[1] <- exp(-h[1])
+  y[1] ~ dt(y.mu[1], y.tau[1], k) 
+  for(i in 2:n) {
+    y.mu[i] <- rho*eta[i]*exp(h[i]/2) + beta0 + beta1*y[i-1]
+    y.tau[i] <- exp(-h[i])
+    y[i] ~ dt(y.mu[i], y.tau[i], k)
+    y_rep[i] ~ dt(y.mu[i], y.tau[i], k)
+  }
+  
+
+
+}"
+
+eur2usd.data2 <- list(n=n,y=y,
+                     beta.mu.0=0,beta.tau.0=0.001,
+                     beta.mu.1=0,beta.tau.1=0.001,
+                     mu.mu=0,mu.tau=0.001,
+                     sigma.a=1,sigma.b=1)
+
+
+num.chains <- 5
+# Compile and run the model
+model2_check <- jags.model(file=textConnection(model2_string), 
+                        data=eur2usd.data2,
+                        n.chains=num.chains)
+# Burnin for 50000 samples
+update(model2_check,50000)
+
+```
+
+```{r}
+# Running the model, monitoring the variable theta
+res.model2_check=coda.samples(model2_check,variable.names=c("y_rep"), n.iter=50000,progress.bar="none")
+
+```
+
+```{r}
+y2rep=res.model2_check[[1]]
+y2repmin=apply(y2rep,1,min)
+hist(y2repmin,col="gray40",xlim=c(-50,2)) 
+abline(v=min(y,na.rm = TRUE),col="red",lwd=2)
+```
+```{r}
+y2repmax=apply(y2rep,1,max)
+hist(y2repmax,col="gray40") 
+abline(v=max(y,na.rm = TRUE),col="red",lwd=2)
+```
+```{r}
+y2repmean=apply(yrep,1,mean)
+hist(y2repmean,col="gray40") 
+abline(v=mean(y,na.rm = TRUE),col="red",lwd=2)
+```
+```{r}
+
+```
+
 
 Explanation: (Write your explanation here)
 
