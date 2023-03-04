@@ -20,6 +20,7 @@ rm(list = ls(all = TRUE))
 library(dbplyr)
 library(tidyverse)
 library(rjags)
+library(INLA)
 ```
 
 ![](Exchange-rate.jpg)
@@ -77,9 +78,16 @@ the results, and discuss them.**
 hyperparameters (you need to choose burn-in and number of steps
 appropriately for this).**
 
-
 ## Data exploration
-First, we extract the first 3 months of USD/EUR data from the dataset, and insert new entries to where the data is missing with NA in order to include all dates from 2000-01-03 until 2000-04-02. Then we create a response variable y by storing the logarithm of the USD/EUR exchange rate estimate for each day, with NA if they are missing. Below is the plot of the response variable y we just created. We see there is a decreasing trend with some fluctuations. 
+
+First, we extract the first 3 months of USD/EUR data from the dataset,
+and insert new entries to where the data is missing with NA in order to
+include all dates from 2000-01-03 until 2000-04-02. Then we create a
+response variable y by storing the logarithm of the USD/EUR exchange
+rate estimate for each day, with NA if they are missing. Below is the
+plot of the response variable y we just created. We see there is a
+decreasing trend with some fluctuations.
+
 ```{r}
 # Create data input for JAGS
 eur2usd <- exrates %>% 
@@ -100,40 +108,55 @@ plot(y)
 ```
 
 ## Leverage Stochastic Volatility model
-Let $\boldsymbol{\theta}$ denote the parameter set, $\boldsymbol{\theta}=\{\beta_0, \beta_1, \phi,\rho,\sigma\}$. Since $\epsilon_t$ and $\eta_t$ given $\boldsymbol{\theta}$ are jointly Gaussian, $y_t$ and $h_{t+1}$ given $h_t$ and $\boldsymbol{\theta}$ are also jointly Gaussian with mean and covariance matrix given below due to the linearity.
-$$
+
+Let $\boldsymbol{\theta}$ denote the parameter set,
+$\boldsymbol{\theta}=\{\beta_0, \beta_1, \phi,\rho,\sigma\}$. Since
+$\epsilon_t$ and $\eta_t$ given $\boldsymbol{\theta}$ are jointly
+Gaussian, $y_t$ and $h_{t+1}$ given $h_t$ and $\boldsymbol{\theta}$ are
+also jointly Gaussian with mean and covariance matrix given below due to
+the linearity. $$
 \left(\begin{matrix} y_t \\ h_{t+1} \end{matrix}\right)\bigg|_{h_t,y_{t-1},\boldsymbol{\theta}} \sim \mathcal{N} \left( \left[ \begin{matrix} \beta_0+\beta_1y_{t-1} \\ mu+\phi(h_t-\mu) \end{matrix} \right] , \left[ \begin{matrix} \exp(h_t) & \sigma \rho \exp(\frac{h_t}{2})\\\sigma \rho \exp(\frac{h_t}{2})& \sigma^2 \end{matrix} \right] \right)
-$$
-By conditioning, the leverage stochastic volatility model can be rewritten as 
-$$
-h_{t+1} | \boldsymbol{\theta} \sim \mathcal{N}(\mu+\phi(h_t-\mu),\sigma^2) \\
+$$ By conditioning, the leverage stochastic volatility model can be
+rewritten as \$\$ h\_{t+1} \| \boldsymbol{\theta}
+\sim \mathcal{N}(\mu+\phi(h_t-\mu),\sigma\^2) \\
 
-y_t|h_{t+1},h_{t},y_{t-1},\boldsymbol{\theta} \sim \mathcal{N} \left(\beta_0+\beta_1y_{t-1}+\exp(\frac{h_t}{2})(h_{t+1}-\mu-\phi(h_t-\mu)),(1-\rho^2)\exp(h_t)\right) 
+y_t\|h\_{t+1},h\_{t},y\_{t-1},\boldsymbol{\theta} \sim \mathcal{N}
+\left(\beta*0+*\beta*1y*{t-1}+\exp(\frac{h_t}{2})(h{t+1}-\mu-\phi(h_t-\mu)),(1-\rho\^2)\exp(h_t)\right)
 
-$$
-### Prior specification
-$\beta_0,\beta_1$: For coefficients $\beta_0$ and $\beta_1$, it is natural to set the Normal prior on it. As we do not have much prior belief, large variances are suggested. $\beta_0 \sim \mathcal{N}(0,1000)$. $\beta_1 \sim \mathcal{N}(0,1000)$
+\$\$ ##\# Prior specification $\beta_0,\beta_1$: For coefficients
+$\beta_0$ and $\beta_1$, it is natural to set the Normal prior on it. As
+we do not have much prior belief, large variances are suggested.
+$\beta_0 \sim \mathcal{N}(0,1000)$. $\beta_1 \sim \mathcal{N}(0,1000)$
 
-$\mu$: A vague with mean $0$ and large variance (e.g.$1000$) is used for $\mu$, $\mu \sim \mathcal {N} (0,1000)$.
+$\mu$: A vague with mean $0$ and large variance (e.g.$1000$) is used for
+$\mu$, $\mu \sim \mathcal {N} (0,1000)$.
 
-$\phi$: As it is necessary to have $\phi \in (-1,1)$ for stability, a prior that ranges from $-1$ to $1$ is needed. A Beta prior has been widely used for parameters ranging from $0$ to $1$. If we put a Beta prior on $\frac{\phi+1}{2}$, we then have $0<\frac{\phi+1}{2}<1$. Consequently, $-1<\phi<1$ is ensured. Therefore, the prior for $\phi$ is chosen to be $\frac{\phi+1}{2} \sim \text{Beta} (1,1)$.
+$\phi$: As it is necessary to have $\phi \in (-1,1)$ for stability, a
+prior that ranges from $-1$ to $1$ is needed. A Beta prior has been
+widely used for parameters ranging from $0$ to $1$. If we put a Beta
+prior on $\frac{\phi+1}{2}$, we then have $0<\frac{\phi+1}{2}<1$.
+Consequently, $-1<\phi<1$ is ensured. Therefore, the prior for $\phi$ is
+chosen to be $\frac{\phi+1}{2} \sim \text{Beta} (1,1)$.
 
 $\sigma$: $\sigma \sim \text{Gamma} (0, 1000)$
 
-$\rho$: An uninformative prior is used for $\rho$. In particular sine $\rho\in [-1,1]$, we use $\rho \sim \text{Uniform} (-1,1)$.
+$\rho$: An uninformative prior is used for $\rho$. In particular sine
+$\rho\in [-1,1]$, we use $\rho \sim \text{Uniform} (-1,1)$.
 
-
-
-We have implemented the model in JAGS as shown below. The hidden states are stored in the vector $h$, and the observations are stored in the vector $y$. We pass
-along $y$ created above to JAGS as $y$ when compiling the model. In
-this $y$ variable (which is a vector of length $n$), remember that we have already set all the points with missing data as NA. JAGS is able to handle these NA values
-automatically by creating stochastic nodes for them (and we could even
-obtain MCMC samples from them). We ran $5$ chains with $50000$ samples after
-$20000$ burn-in iterations, starting from an initial position for $y$ based
-on the true observation of $y_1$ and some random noise.
+We have implemented the model in JAGS as shown below. The hidden states
+are stored in the vector $h$, and the observations are stored in the
+vector $y$. We pass along $y$ created above to JAGS as $y$ when
+compiling the model. In this $y$ variable (which is a vector of length
+$n$), remember that we have already set all the points with missing data
+as NA. JAGS is able to handle these NA values automatically by creating
+stochastic nodes for them (and we could even obtain MCMC samples from
+them). We ran $5$ chains with $50000$ samples after $20000$ burn-in
+iterations, starting from an initial position for $y$ based on the true
+observation of $y_1$ and some random noise.
 
 ```{r}
 #model in BUGS syntax
+
 model_string <- "model {
   # prior
   beta0 ~ dnorm(beta.mu.0, beta.tau.0)
@@ -141,10 +164,10 @@ model_string <- "model {
   mu ~ dnorm(mu.mu,mu.tau)
   trans_phi ~ dbeta(20,1.5)
   phi <- 2*trans_phi-1
-  tau ~ dgamma(sigma.a,sigma.b)
-  sigma <- pow(tau,-2)
-  rho ~ dunif(-1,1)
-  
+  tau ~ dgamma(sigma.a,sigma.b) 
+  sigma <- pow(tau,-1/2)
+  trans_rho ~ dbeta(3,5)
+  rho <- 2*trans_phi-1
   # Likelihood
   h[1] ~ dnorm(mu, (1-phi^2)*tau)
   #The evolution of the hidden states x according to the model
@@ -153,10 +176,10 @@ model_string <- "model {
   }
   
   y[1] ~ dnorm(mean.y0,prec.y0)
-  y.var[1] <- pow(prec.y0,-1)
+  y.var[1] <- prec.y0^(-1)
   for(i in 2:n) {
     y.mu[i] <- rho/sigma*exp(h[i]/2)*(h[i+1]-mu-phi*(h[i]-mu))+beta0 + beta1*y[i-1]
-    y.var[i] <- exp(h[i])*(1-pow(rho,2)) + beta1^2*y.var[i-1]
+    y.var[i] <- exp(h[i])*(1-rho^2) 
     y[i] ~ dnorm(y.mu[i], pow(y.var[i],-1))
   }
   
@@ -164,7 +187,6 @@ model_string <- "model {
 
 }"
 ```
-
 
 ```{r}
 # Create data input for JAGS
@@ -174,20 +196,19 @@ eur2usd <- exrates %>%
   select(USD,date) %>%
   mutate(date=date-date[1]+1,USD=log(USD))
 
-n <- eur2usd$date[length(eur2usd$date)]
-y <- rep(NA,n)
+n <- eur2usd$date[length(eur2usd$date)] +2 # include 1/4 and 2/4
+y <- rep(NA,n) 
 j <- 1
 for(i in eur2usd$date){
   y[i] <- eur2usd$USD[j]
   j <- j+1
 }
 
-n <- length(eur2usd)
 
 eur2usd.data <- list(n=n,y=y,mean.y0=y[1],prec.y0=0.001,
                      beta.mu.0=0,beta.tau.0=0.001,
                      beta.mu.1=0,beta.tau.1=0.001,
-                     mu.mu=0,mu.tau=0.001,sigma.a=0.001,sigma.b=0.001)
+                     mu.mu=0,mu.tau=0.001,sigma.a=1,sigma.b=1)
 
 
 model1.inits=list()
@@ -213,31 +234,35 @@ num.chains <- 5
 model1 <- jags.model(file=textConnection(model_string), 
                         data=eur2usd.data,
                         n.chains=num.chains)
-# Burnin for 20000 samples
-update(model1,50000,progress.bar="none")
+# Burnin for 50000 samples
+update(model1,50000)
 ```
-Explanation: We printed out the posterior summaries for the
-model parameters beta0, beta1, mu, phi, rho, and sigma using the `summary(res.model1)`
-command. \textcolor{red}{We can see that the standard deviations are typically much
+
+Explanation: We printed out the posterior summaries for the model
+parameters beta0, beta1, mu, phi, rho, and sigma using the
+`summary(res.model1)` command.
+\textcolor{red}{We can see that the standard deviations are typically much
 smaller than the means in absolute value, indicating that the the amount
 of data is sufficient to fit the model parameters with some degree of
-confidence.} The time series SE is smaller than the posterior means
-(in absolute value), showing that our estimates are relatively accurate. The trace plots of each parameter show that the chains were mixing well.
+confidence.} The time series SE is smaller than the posterior means (in
+absolute value), showing that our estimates are relatively accurate. The
+trace plots of each parameter show that the chains were mixing well.
 
 ```{r}
 # Running the model, monitoring the variable theta
-res.model1=coda.samples(model1,variable.names=c("beta0", "beta1", "mu", "phi", "sigma", "rho"), n.iter=50000,progress.bar="none")
+res.model1=coda.samples(model1,variable.names=c("beta0", "beta1", "mu", "phi", "sigma", "rho"), n.iter=60000,progress.bar="none")
 
 #Setting margins to be small
-summary(res.model1); plot(res.model1)
-effectiveSize(res.model1)
+summary(res.model1); effectiveSize(res.model1);
+plot(res.model1)
 ```
 
 Explanation: We plotted the autocorrelation functions for the 4
 components of A using the acf function. We set the lag.max parameter to
-1000 to clearly display the plots. We can see that the samples from
-mu suffer from the most autocorrelation, but it is mostly gone after
-a lag of 100, and almost completely gone after a lag of 300.
+1000 to clearly display the plots. We can see that the samples from mu
+suffer from the most autocorrelation, but it is mostly gone after a lag
+of 100, and almost completely gone after a lag of 300.
+
 ```{r}
 par(mar = c(2, 2, 4, 2))
 acf(res.model1[[1]][,"beta0"],lag.max=1000,main="ACF for beta0")
@@ -260,12 +285,6 @@ gelman.diag(res.model1)
 ```{r}
 gelman.plot(res.model1)
 ```
-
-```{r}
-effectiveSize(res.model1)
-```
-
-
 
 **b)[10 marks] In practice, one often encounters outliers in exchange
 rates. These can be sometimes modeled by assuming Student's t
@@ -295,7 +314,7 @@ $$
 
 ```{r}
 #model in BUGS syntax
-model_string <- "model {
+model2_string <- "model {
   # prior
   beta0 ~ dnorm(beta.mu.0, beta.tau.0)
   beta1 ~ dnorm(beta.mu.1, beta.tau.1)
@@ -305,6 +324,7 @@ model_string <- "model {
   tau ~ dgamma(sigma.a,sigma.b)
   sigma <- pow(tau,-2)
   rho ~ dunif(-1,1)
+  k ~ dchisq(1)
   
   # Likelihood
   h[1] ~ dnorm(mu, (1-phi^2)*tau)
@@ -313,12 +333,19 @@ model_string <- "model {
     h[i] ~ dnorm(mu+phi*(h[i-1]-mu), tau) 
   }
   
-  y[1] ~ dt(mean.y0, sigma2.y0,k)
-  k ~ dchisq(8,)
-  y.var[1] <- pow(prec.y0,-1)
+    
+  z.inv[1] ~ dgamma(k/2,k/2)
+  z[1] <- pow(z.inv[1],-1)
+  
+  y.mu[1] <- rho/sigma*sqrt(z[1])*exp(h[1]/2)*(h[2]-mu-phi*(h[1]-mu))+beta0
+  y.var[1] <- z[1]*exp(h[1])*(1-rho*rho)
+  y[1] ~ dnorm(y.mu[1], pow(y.var[1],-1)) 
   for(i in 2:n) {
-    y.mu[i] <- rho/sigma*exp(h[i]/2)*(h[i+1]-mu-phi*(h[i]-mu))+beta0 + beta1*y[i-1]
-    y.var[i] <- exp(h[i])*(1-pow(rho,2)) + beta1^2*y.var[i-1]
+    z.inv[i] ~ dgamma(k/2,k/2)
+    z[i] <- 1/z.inv[i]
+
+    y.mu[i] <- rho/sigma*sqrt(z[i])*exp(h[i]/2)*(h[i+1]-mu-phi*(h[i]-mu)) + beta0 + beta1*y[i-1]
+    y.var[i] <- z[i]*exp(h[i])*(1-pow(rho,2)) + beta1^2*y.var[i-1]
     y[i] ~ dnorm(y.mu[i], pow(y.var[i],-1))
   }
   
@@ -327,6 +354,58 @@ model_string <- "model {
 }"
 ```
 
+```{r}
+#model in BUGS syntax
+model2_string <- "model {
+  # prior
+  beta0 ~ dnorm(beta.mu.0, beta.tau.0)
+  beta1 ~ dnorm(beta.mu.1, beta.tau.1)
+  mu ~ dnorm(mu.mu,mu.tau)
+  trans_phi ~ dbeta(18,1.5)
+  phi <- 2*trans_phi-1
+  tau ~ dgamma(sigma.a,sigma.b)
+  sigma <- pow(tau,-2)
+  rho ~ dunif(-1,1)
+  k ~ dchisq(8) 
+  
+  # Likelihood
+  h[1] ~ dnorm(mu, (1-phi^2)*tau)
+  #The evolution of the hidden states x according to the model
+  for(i in 2:(n+1)) {
+    eta[i] ~ dnorm(0,1)
+    h[i] <- mu+phi*(h[i-1]-mu)+sigma*eta[i]
+  }
+  
+  
+  y.mu[1] <- 0.5
+  y.tau[1] <- exp(-h[1])
+  y[1] ~ dt(y.mu[1], y.tau[1], k) T(0,10)
+  for(i in 2:n) {
+    y.mu[i] <- rho*eta[i]*exp(h[i]/2) + beta0 + beta1*y[i-1]
+    y.tau[i] <- exp(-h[i])
+    y[i] ~ dt(y.mu[i], y.tau[i],k)T(0,10)
+  }
+  
+
+
+}"
+
+eur2usd.data2 <- list(n=n,y=y,
+                     beta.mu.0=0,beta.tau.0=0.001,
+                     beta.mu.1=0,beta.tau.1=0.001,
+                     mu.mu=0,mu.tau=0.001,
+                     sigma.a=0.001,sigma.b=0.001)
+
+
+num.chains <- 5
+# Compile and run the model
+model1 <- jags.model(file=textConnection(model2_string), 
+                        data=eur2usd.data2,
+                        n.chains=num.chains)
+# Burnin for 20000 samples
+update(model1,10000)
+
+```
 
 Explanation: (Write your explanation here)
 
@@ -335,9 +414,84 @@ Explanation: (Write your explanation here)
 **Perform posterior predictive checks on both models a) and b). Explain
 how did you choose the test functions.**
 
-**Discuss the results.**
+**Discuss the results.** ##\# Posterior predictive checks for (a)
 
 ```{r}
+#model in BUGS syntax
+
+model_string <- "model {
+  # prior
+  beta0 ~ dnorm(beta.mu.0, beta.tau.0)
+  beta1 ~ dnorm(beta.mu.1, beta.tau.1)
+  mu ~ dnorm(mu.mu,mu.tau)
+  trans_phi ~ dbeta(20,1.5)
+  phi <- 2*trans_phi-1
+  tau ~ dgamma(sigma.a,sigma.b) 
+  sigma <- pow(tau,-1/2)
+  trans_rho ~ dbeta(3,5)
+  rho <- 2*trans_phi-1
+  # Likelihood
+  h[1] ~ dnorm(mu, (1-phi^2)*tau)
+  #The evolution of the hidden states x according to the model
+  for(i in 2:(n+1)) {
+    h[i] ~ dnorm(mu+phi*(h[i-1]-mu), tau) 
+  }
+  
+  y[1] ~ dnorm(mean.y0,prec.y0)
+  y_rep[1] ~ dnorm(mean.y0,prec.y0)
+  y.var[1] <- prec.y0^(-1)
+  for(i in 2:n) {
+    y.mu[i] <- rho/sigma*exp(h[i]/2)*(h[i+1]-mu-phi*(h[i]-mu))+beta0 + beta1*y[i-1]
+    y.var[i] <- exp(h[i])*(1-rho^2) 
+    y[i] ~ dnorm(y.mu[i], pow(y.var[i],-1))
+    y_rep[i] ~ dnorm(y.mu[i], pow(y.var[i],-1))
+  }
+  
+
+
+}"
+```
+
+```{r}
+num.chains <- 5
+# Compile and run the model
+model1_check <- jags.model(file=textConnection(model_string), 
+                        data=eur2usd.data,
+                        n.chains=num.chains)
+# Burnin for 20000 samples
+update(model1_check,50000)
+```
+
+```{r}
+# Running the model, monitoring the variable theta
+res.model1_check=coda.samples(model1_check,variable.names=c("y_rep"), n.iter=60000,progress.bar="none")
+
+#Setting margins to be small
+summary(res.model1_check); effectiveSize(res.model1_check);
+
+```
+
+```{r}
+yrep=res.model1_check[[1]]
+yrepmin=apply(yrep,1,min)
+hist(yrepmin,col="gray40") 
+abline(v=min(y,na.rm = TRUE),col="red",lwd=2)
+```
+
+```{r}
+
+yrepmax=apply(yrep,1,min)
+hist(yrepmax,col="gray40") 
+abline(v=max(y,na.rm = TRUE),col="red",lwd=2)
+
+```
+
+```{r}
+
+yrep=res.model1_check[[1]]
+yrepmean=apply(yrep,1,mean)
+hist(yrepmean,col="gray40") 
+abline(v=mean(y,na.rm = TRUE),col="red",lwd=2)
 
 ```
 
@@ -349,10 +503,6 @@ Explanation: (Write your explanation here)
 densities of the USD/EUR rate on the dates 2000-04-03, 2020-04-04 and
 2020-04-05 (the next 3 days after the period considered). Compute the
 posterior means and 95% credible intervals. Discuss the results.**
-
-```{r}
-
-```
 
 Explanation: (Write your explanation here)
 
@@ -375,9 +525,10 @@ rates, respectively.**
 **Implement this model in JAGS or Stan.**
 
 **Discuss your choices for priors for every parameter [Hint: you can use
-Wishart or scaled Wishart priors for** $\boldsymbol{\Sigma}$, **see
+Wishart or scaled Wishart priors for\*\*** $\boldsymbol{\Sigma}$,
+\*\*see
 <https://www.stats.ox.ac.uk/~nicholls/MScMCMC15/jags_user_manual.pdf> ,
-<https://mc-stan.org/docs/2_19/functions-reference/wishart-distribution.html>].**
+<https://mc-stan.org/docs/2_19/functions-reference/wishart-distribution.html>].
 
 **Fit the model, do convergence diagnostics, print out the summary of
 the results, and discuss them.**
@@ -445,10 +596,7 @@ quantifies the effect of playing at home on the expected number of goals
 scored. Our model is the following (**$\mu_g^{H}$ **is for the goals
 scored by the home team, and is** $\mu_g^{A}$ **is for the away team):**
 
-$\begin{aligned}
-\mu_{g}^{H}&= \beta_0+a_{home.team}+d_{away.team}+h\\
-\mu_{g}^{A}&= \beta_0+a_{away.team}+d_{home.team}
-\end{aligned}$
+$\begin{aligned} \mu_{g}^{H}&= \beta_0+a_{home.team}+d_{away.team}+h\\ \mu_{g}^{A}&= \beta_0+a_{away.team}+d_{home.team} \end{aligned}$
 
 **Implement this model. Select your own prior distributions for the
 parameters, and discuss the reason for using those priors.**
@@ -462,6 +610,46 @@ versus the true scores.**
 **Interpret the results.**
 
 ```{r}
+# Create dataset
+games_data <- games %>%
+  filter(SEASON %in% 2021) %>%
+  select(GAME_DATE_EST,HOME_TEAM_ID,VISITOR_TEAM_ID,PTS_home,PTS_away) %>%
+  arrange(GAME_DATE_EST) %>% 
+  group_by(HOME_TEAM_ID,VISITOR_TEAM_ID)
+
+plot(density(games_data$PTS_home),type="l")
+lines(density(games_data$PTS_away),type="l",col="red")
+```
+
+```{r}
+
+y2=c(games_data$PTS_home, games_data$PTS_away)
+G=nrow(games_data)
+
+HT_char=as.character(games_data$HOME_TEAM_ID)
+AT_char=as.character(games_data$VISITOR_TEAM_ID)
+attack=as.factor(c(HT_char,AT_char))
+defense=as.factor(c(AT_char,HT_char))
+h=c(rep(1,G),rep(0,G))
+
+```
+
+```{r}
+prior.prec <- list(prec=list(prior = "loggamma", param = c(0.1, 0.1)))
+prior.fixed <- list(mean.intercept = mean(y2), prec.intercept = 0.01,
+                    mean = 0, prec = 0.01)
+data=data.frame(y2,attack,defense,h)
+m.gaussian=inla(formula=y2~1+attack+defense+h,
+                data=data,family="gaussian",
+                control.family=list(hyper=prior.prec),
+                control.fixed=prior.fixed,
+                control.compute = list(dic = T,config = TRUE,
+                                       return.marginals.predictor=TRUE))
+summary(m.gaussian)
+```
+
+```{r}
+fittedvalues1 <- m.gaussian$summary.fitted.values
 
 ```
 
@@ -471,10 +659,7 @@ Explanation: (Write your explanation here)
 same for each team. In this part, we consider a team-specific home
 effect** $h_{home.team}$,
 
-$\begin{aligned}
-\mu_{g}^{H}&= \beta_0+a_{home.team}+d_{away.team}+h_{home.team}\\
-\mu_{g}^{A}&= \beta_0+a_{away.team}+d_{home.team}
-\end{aligned}$
+$\begin{aligned} \mu_{g}^{H}&= \beta_0+a_{home.team}+d_{away.team}+h_{home.team}\\ \mu_{g}^{A}&= \beta_0+a_{away.team}+d_{home.team} \end{aligned}$
 
 **Implement this model. Select your own prior distributions for the
 parameters, and discuss the reason for using those priors.**
@@ -488,6 +673,19 @@ versus the true scores.**
 **Interpret the results.**
 
 ```{r}
+
+h.team=c(as.character(games_data$HOME_TEAM_ID),rep(0,G))
+prior.prec <- list(prec=list(prior = "loggamma", param = c(0.1, 0.1)))
+prior.fixed <- list(mean.intercept = mean(y2), prec.intercept = 0.001,
+                   mean = 0, prec = 0.01)
+data=data.frame(y2,attack,defense,h.team)
+m2.gaussian=inla(formula=y2~1+attack+defense+h.team,
+                data=data,family="gaussian",
+                control.family=list(hyper=prior.prec),
+                control.fixed=prior.fixed,
+                control.compute = list(dic = T,config = TRUE,
+                                       return.marginals.predictor=TRUE))
+summary(m2.gaussian)
 
 ```
 
