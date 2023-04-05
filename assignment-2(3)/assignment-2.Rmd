@@ -15,142 +15,7 @@ output: pdf_document
 
 **IMPORTANT INFORMATION ABOUT THE ASSIGNMENT**
 
-**In this paragraph, we summarize the essential information about this
-assignment. The format and rules for this assignment are different from
-your other courses, so please pay attention.**
 
-**1) Deadline: The deadline for submitting your solutions to this
-assignment is the 17 April 12:00 noon Edinburgh time.**
-
-**2) Format: You will need to submit your work as 2 components: a PDF
-report, and your R Markdown (.Rmd) notebook. There will be two separate
-submission systems on Learn: Gradescope for the report in PDF format,
-and a Learn assignment for the code in Rmd format. You need to write
-your solutions into this R Markdown notebook (code in R chunks and
-explanations in Markdown chunks), and then select Knit/Knit to PDF in
-RStudio to create a PDF report.**
-
-![](knit_to_PDF.jpg){width="192"}
-
-**The compiled PDF needs to contain everything in this notebook, with
-your code sections clearly visible (not hidden), and the output of your
-code included. Reports without the code displayed in the PDF, or without
-the output of your code included in the PDF will be marked as 0, with
-the only feedback "Report did not meet submission requirements".**
-
-**You need to upload this PDF in Gradescope submission system, and your
-Rmd file in the Learn assignment submission system. You will be required
-to tag every sub question on Gradescope.**
-
-**Some key points that are different from other courses:**
-
-**a) Your report needs to contain written explanation for each question
-that you solve, and some numbers or plots showing your results.
-Solutions without written explanation that clearly demonstrates that you
-understand what you are doing will be marked as 0 irrespectively whether
-the numerics are correct or not.**
-
-**b) Your code has to be possible to run for all questions by the Run
-All in RStudio, and reproduce all of the numerics and plots in your
-report (up to some small randomness due to stochasticity of Monte Carlo
-simulations). The parts of the report that contain material that is not
-reproduced by the code will not be marked (i.e. the score will be 0),
-and the only feedback in this case will be that the results are not
-reproducible from the code.**
-
-![](run_all.jpg){width="375"}
-
-**c) Multiple Submissions are allowed BEFORE THE DEADLINE are allowed
-for both the report, and the code.\
-However, multiple submissions are NOT ALLOWED AFTER THE DEADLINE.\
-YOU WILL NOT BE ABLE TO MAKE ANY CHANGES TO YOUR SUBMISSION AFTER THE
-DEADLINE.\
-Nevertheless, if you did not submit anything before the deadline, then
-you can still submit your work after the deadline, but late penalties
-will apply. The timing of the late penalties will be determined by the
-time you have submitted BOTH the report, and the code (i.e. whichever
-was submitted later counts).**
-
-**We illustrate these rules by some examples:**
-
-**Alice has spent a lot of time and effort on her assignment for BDA.
-Unfortunately, before submission, she has accidentally introduced a typo
-in her code in the first question, and it did not run using Run All in
-RStudio. - Alice will get 0 for the questions that do not run in her
-code (we will try to run each code block individually), with the only
-feedback "Results are not reproducible from the code".**
-
-**Bob has spent a lot of time and effort on his assignment for BDA.
-Unfortunately he forgot to submit his code. - Bob will get no personal
-reminder to submit his code. Bob will get 0 for the whole assignment,
-with the only feedback "Results are not reproducible from the code, as
-the code was not submitted."**
-
-**Charles has spent a lot of time and effort on his assignment for BDA.
-He has submitted both his code and report in the correct formats.
-However, he did not include any explanations in the report. Charles will
-get 0 for the whole assignment, with the only feedback "Explanation is
-missing."**
-
-**Denise has spent a lot of time and effort on her assignment for BDA.
-She has submitted her report in the correct format, but thought that she
-can include her code as a link in the report, and upload it online (such
-as Github, or Dropbox). - Denise will get 0 for the whole assignment,
-with the only feedback "Code was not uploaded on Learn."**
-
-**3) Group work: This is an INDIVIDUAL ASSIGNMENT, like a 2 week exam
-for the course. Communication between students about the assignment
-questions is not permitted. Students who submit work that has not been
-done individually will be reported for Academic Misconduct, that can
-lead to serious consequences. Each problem will be marked by a single
-instructor, so we will be able to spot students who copy.**
-
-**4) Piazza: During the periods of the assignments, the instructor will
-change Piazza to allow messaging the instructors only, i.e. students
-will not see each others messages and replies.**
-
-**Only questions regarding clarification of the statement of the
-problems will be answered by the instructors. The instructors will not
-give you any information related to the solution of the problems, such
-questions will be simply answered as "This is not about the statement of
-the problem so we cannot answer your question."**
-
-**THE INSTRUCTORS ARE NOT GOING TO DEBUG YOUR CODE, AND YOU ARE ASSESSED
-ON YOUR ABILITY TO RESOLVE ANY CODING OR TECHNICAL DIFFICULTIES THAT YOU
-ENCOUNTER ON YOUR OWN.**
-
-**5) Office hours: There will be two office hours per week (Monday
-14:00-15:00, and Wednesdays 15:00-16:00) during the 2 weeks for this
-assignment. The links are available on Learn / Course Information. I
-will be happy to discuss the course/workshop materials. However, I will
-only answer questions about the assignment that require clarifying the
-statement of the problems, and will not give you any information about
-the solutions. Students who ask for feedback on their assignment
-solutions during office hours will be removed from the meeting.**
-
-**6) Late submissions and extensions: NO EXTENSIONS ARE ALLOWED FOR THIS
-ASSIGNMENT, AND THERE IS NO SUCH OPTION PROVIDED IN THE ESC SYSTEM.
-Students who have existing Learning Adjustments in Euclid will be
-allowed to have the same adjustments applied to this course as well, but
-they need to apply for this BEFORE THE DEADLINE on the website**
-
-<https://www.ed.ac.uk/student-administration/extensions-special-circumstances>
-
-**by clicking on "Access your learning adjustment". This will be
-approved automatically.**
-
-**Students who submit their work late will have late submission
-penalties applied by the ESC team automatically (this means that even if
-you are 1 second late because of your internet connection was slow, the
-penalties will still apply). The penalties are 5% of the total mark
-deduced for every day of delay started (i.e. one minute of delay counts
-for 1 day). The course instructors do not have any role in setting these
-penalties, we will not be able to change them.**
-
-**7) Please make sure to tag all pages in your submission on Gradescope,
-otherwise we may miss some of your work. Once your upload is complete,
-tagging does not counts towards your submission time (i.e. you won't get
-any late penalties for doing it).**
 
 ```{r}
 rm(list = ls(all = TRUE))
@@ -168,6 +33,10 @@ set is based on one-year vehicle insurance policies taken out in 2004 or
 
 ```{r}
 require(insuranceData)
+require(dplyr)
+require(knitr)
+require(dummies)
+require(rjags)
 data(dataCar)
 
 #You may need to set the working directory first before loading the dataset
@@ -224,9 +93,123 @@ prior on the linear predictor and on the response.]**
 **Compute the posterior means of the model parameters, and discuss the
 results.**
 
+Preprocessing
+```{r}
+car.data <- dataCar %>% select(veh_value, exposure, 
+                               veh_body, veh_age, gender, 
+                               area, agecat, clm)
+car.data.centred <- car.data %>% 
+  mutate(veh_value=veh_value-mean(veh_value), exposure=exposure-mean(exposure),
+         veh_age=veh_age-mean(veh_age))
+```
+
+Data block
+```{r}
+n <- nrow(car.data)
+body.dum <- dummy(car.data.centred$veh_body)
+agecat.dum <- dummy(car.data.centred$agecat)
+gen.dum <- dummy(car.data.centred$gender)
+area.dum <- dummy(car.data.centred$area)
+car.logit.data <- list(n=n, body=body.dum[,-1],
+                     agecat=agecat.dum[,-1],
+                     gender=gen.dum[,-1],
+                     area=area.dum[,-1],
+                     veh_value=car.data.centred$veh_value,
+                     exposure=car.data.centred$exposure,
+                     veh_age=car.data.centred$veh_age)
+```
+
+Model string
+```{r}
+car.logit.model <- "model {
+ beta.mu.0   <- 0
+ beta.tau.0  <- 1/(log(15)^2)
+ beta.mu <- 0
+ beta.tau <- 1/(log(5)/2)^2
+ # prior
+ beta0       ~ dnorm(beta.mu.0,beta.tau.0)
+ beta.veh_value  ~ dnorm(beta.mu,beta.tau)
+ beta.exposure ~ dnorm(beta.mu,beta.tau)
+ beta.veh_age    ~ dnorm(beta.mu,beta.tau)
+ beta.gender ~ dnorm(beta.mu,beta.tau)
+ for (i in 1:length(body[1,])){
+     beta.body[i] ~ dnorm(beta.mu,beta.tau)
+ }
+ for (i in 1:length(agecat[1,])){
+     beta.agecat[i] ~ dnorm(beta.mu,beta.tau)
+ }
+ for (i in 1:length(area[1,])){
+     beta.area[i] ~ dnorm(beta.mu,beta.tau)
+ }
+ 
+ #Likelihood
+ for(i in 1:n) {
+   logit(mu[i])  <- beta0+beta.veh_value*veh_value[i] +
+               beta.exposure*exposure[i] + beta.veh_age*veh_age[i] +
+               beta.gender*gender[i] +
+               sum(beta.body%*%body[i,]) +
+               sum(beta.agecat%*%agecat[i,]) +
+               sum(beta.area%*%area[i,])
+
+   clm[i] ~ dbern(mu[i])
+ } 
+}"
+```
+
+```{r}
+# Run JAGS to the completion of the "adaption" stage 
+results.car.logit <- jags.model(file=textConnection(car.logit.model), 
+                                   data=car.logit.data,
+                                   n.chains=3)
+
+# Burn-in of 10000 iterations
+update(results.car.logit, n.iter=1000)
+
+# Longer run for making inferences, assuming chains have converged
+results.car.logit <- coda.samples(results.car.logit,
+                                  variable.names=c("beta0","beta.veh_value",
+                                                   "beta.exposure","beta.veh_age",
+                                                   "beta.gender","beta.body",
+                                                   "beta.agecat","beta.area"), 
+                                  n.iter=1000)
+
+# Summary 
+summary(results.car.logit)
+```
+
 ```{r}
 
+#Interpretation of parameter values
+#Joining all the chains in one data.frame
+results.car.logit.output <- 
+do.call(rbind.data.frame, results.car.logit)
+#interpretation
+cat("E[beta_LightMed] is",
+mean(results.car.logit.output$`beta.agecat[1]`,3),"\n")
+
+cat("E[beta_LightMed] is",
+mean(results.car.logit.output$`beta.agecat[2]`,3),"\n")
+
+cat("E[beta_LightMed] is",
+mean(results.car.logit.output$`beta.agecat[3]`,3))
+
+#... similarly for the other colours
 ```
+```{r}
+#interpretation
+ilogit=function(x){ 1/(1+exp(-x))} #Inverse logistic function
+cat("E[ilogit(beta0)] is",round(mean(ilogit(results.car.logit.output$beta0)),3),"\n")
+
+```
+
+```{r}
+cat("E[ilogit(beta0+beta1)]/E[ilogit(beta0)] is",
+round(mean(ilogit(results.beetles.output$beta0
+                  +results.beetles.output$beta1))/
+mean(ilogit(results.beetles.output$beta0)),3),"\n")
+```
+
+
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
 for insufficient explanation):
