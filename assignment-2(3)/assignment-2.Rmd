@@ -106,9 +106,9 @@ Preprocessing
 car.data <- dataCar %>% select(veh_value, exposure, 
                                veh_body, veh_age, gender, 
                                area, agecat, clm)
-car.data.ctr <- car.data %>% 
-  mutate(veh_value=veh_value-mean(veh_value), exposure=exposure-mean(exposure),
-         veh_age=veh_age-mean(veh_age))
+car.data.scl <- car.data %>% 
+  mutate(veh_value=scale(veh_value), exposure=scale(exposure),
+         veh_age=scale(veh_age))
 ```
 
 Data block
@@ -222,6 +222,7 @@ car.logit.model2 <- "model {
                +beta.agecat.6 *agecat6[i]
 
    clm[i] ~ dbern(mu[i])
+   clm.rep[i] ~ dbern(mu[i])
  } 
 }"
 ```
@@ -236,7 +237,8 @@ update(results.car.logit2, n.iter=10000)
 
 # Longer run for making inferences, assuming chains have converged
 results.car.logit2 <- coda.samples(results.car.logit2,
-                                  variable.names=c("beta0" ,"beta.veh_value" ,
+                                  variable.names=c("clm.rep","beta0",
+                                                   "beta.veh_value",
                                                    "beta.exposure" ,"beta.veh_age",
                                                    "beta.gender.m",
                                                    "beta.body.convt",
@@ -264,7 +266,7 @@ results.car.logit2 <- coda.samples(results.car.logit2,
                                   n.iter=3000)
 
 # Summary 
-summary(results.car.logit2)
+
 ```
 Model string
 ```{r}
@@ -362,12 +364,12 @@ INLA
 ```{r}
 
 ####Car data with categorical covariates - INLA ####
-car.inla.data <- car.data.ctr %>% 
+car.inla.data <- car.data.scl %>% 
   mutate(veh_body=as.factor(veh_body),area=as.factor(area),
-         agecat=as.factor(agecat),clm=as.factor(clm))
+         agecat=as.factor(agecat))
 #Priors for the regression coefficients.
-prior.beta <- list(mean.intercept = 0, prec.intercept =  1/(log(15)^2),
-                    mean = 0, prec = 1/(log(5)/2)^2)
+prior.beta <- list(mean.intercept = 0, prec.intercept =  3,
+                    mean = 0, prec = 3)
 #Fitting the model in INLA
 #"control.fixed=prior.beta" sets regression coeff. priors.
 results.car.logit.I <- inla(formula = clm ~ veh_value+exposure+veh_body+
@@ -393,32 +395,29 @@ fitted.post.pred=rbinom(n=n, size=1, prob=fittedvalues.I)
 
 #Create new rows in the dataset for these widths,
 #for all 4 colours, with the response Satellites set to NA
-newdata <- rbind(data.frame(Width=x,Colour=as.factor("dk"),
-        Satellites=NA), data.frame(Width=x,Colour=as.factor("dk.med"),
-Satellites=NA),data.frame(Width=x,Colour=as.factor("med"),
-Satellites=NA),data.frame(Width=x,Colour=as.factor("lt.med"),
-Satellites=NA))
-
+newdata <- car.inla.data %>%
+  mutate(clm=rep(NA,len=nrow(car.inla.data)))
 #Join the new rows with the original dataframe,
 #and include the centered width covariate
-newdata=rbind(newdata,data.frame(Satellites=crabs$Satellites,
-              Width=crabs$Width,Colour=crabs$Colour))
-newdata$Width.ctr=newdata$Width-mean(crabs$Width)
+newdata=rbind(newdata,car.inla.data)
 
 #whenever we use a model with link function that is not the identity
 #and we want to compute the posterior marginal and mean of mu_i
 #and not eta_i,we need to set link=1 in control.predictor
-car.inla.data <- car.data.centred %>% 
-  mutate(veh_body=as.factor(veh_body),area=as.factor(area),agecat=as.factor(agecat))
 m3.I <- inla(formula = clm ~ veh_value+exposure+veh_body+
                veh_age+gender+area+agecat, family="binomial",Ntrials=1,
              control.family=list(link="logit"),
-data=car.inla.data, control.fixed=prior.beta,
+data=newdata, control.fixed=prior.beta,
 control.predictor = list(compute = TRUE,link=1),
 control.compute=list(config=TRUE))
+
+```
+
+
+```{r}
 #Rows 1:lx contain the results for colour Light med,
 #rows lx+1:2*lx contain the results for colour Med, etc.
-fittedvaluesm=m3.I$summary.fitted.values$mean
+fittedvaluesm=m3.I$summary.fitted.values$mean[nrow(newdata)/2:nrow(newdata)]
 plot(car.data.centred$exposure,car.data.centred$clm, col="black", xlab="exposure",
 ylab="clm")
 legend("topleft", c("1", "2", "3", "4","5","6"),
@@ -441,6 +440,10 @@ lines(x, fittedvaluesm[(3*n+1):(4*n)], col="orange", lwd=3, lty=3)
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
 for insufficient explanation):
+
+The logistic regression model using the required covariates was implemented in INLA. First, we standerdise the non-categorical covariates so that the mean is 1 and standered deviation is $1$ for each non-categorical covariate. For categorical covariates, INLA will automatically create $k-1$ indicators, where $k$ is the number of catogories for certain covariate. The link function is chosen to be the logit function in our model.
+
+For the choice of priors, we follow the common choice of normal distribution in general. Since we believe the typical probability of a claim is between $0.05 \sim 0.95$, then $\log(1/19)<\log(\frac{p}{1-p})<\log(19)$. Equivalently, we would like the intercept $\beta_0$ to mostly take values from $\log(1/19)$ to $\log(19)$. Therefore, the prior for $\beta_0$ is set to be $\mathcal{N}\left(0,\frac{\log(1/19)}{3}\right)$.
 
 **b)[10 marks] Fit a Bayesian Poisson regression model on numclaims as
 response with**
