@@ -94,10 +94,56 @@ prior on the linear predictor and on the response.]**
 **Compute the posterior means of the model parameters, and discuss the
 results.**
 
+```{r}
+odds <- function(x) x/(1-x)
+```
 
 Data exploration
 ```{r}
+odds.body <- c()
+for (i in 1:13){
+  body <- unique(dataCar$veh_body)[i]
+  df.body <- dataCar %>% filter(veh_body %in% c(body)) 
+  odds.body[i] <- odds(sum(df.body$clm == 1)/nrow(df.body))
+}
+body.ratio <- max(odds.body)/min(odds.body)
+body.ratio 
 
+odds.gender <- c()
+df.m <- dataCar %>% filter(gender %in% c("M"))
+df.f <- dataCar %>% filter(gender %in% c("F"))
+odds.gender[1] <- odds(sum(df.m$clm == 1)/nrow(df.m))
+odds.gender[2] <- odds(sum(df.f$clm == 1)/nrow(df.f))
+gender.ratio <- max(odds.gender)/min(odds.gender)
+gender.ratio
+
+odds.area <- c()
+for (i in 1:6){
+  a <- unique(dataCar$area)[i]
+  df.area <- dataCar %>% filter(area %in% c(a)) 
+  odds.area[i] <- odds(sum(df.area$clm == 1)/nrow(df.area))
+}
+area.ratio <- max(odds.area)/min(odds.area)
+area.ratio
+
+odds.agecat <- c()
+for (i in 1:6){
+  age <- unique(dataCar$agecat)[i]
+  df.agecat <- dataCar %>% filter(agecat %in% c(age)) 
+  odds.agecat[i] <- odds(sum(df.agecat$clm == 1)/nrow(df.agecat))
+}
+agecat.ratio <- max(odds.agecat)/min(odds.agecat)
+agecat.ratio
+
+
+odds.v_age <- c()
+for (i in 1:4){
+  v_age <- unique(dataCar$veh_age)[i]
+  df.v_age <- dataCar %>% filter(veh_age %in% c(v_age)) 
+  odds.v_age[i] <- odds(sum(df.v_age$clm == 1)/nrow(df.v_age))
+}
+v_age.ratio <- max(odds.v_age)/min(odds.v_age)
+v_age.ratio
 ```
 
 
@@ -367,8 +413,12 @@ car.inla.data <- car.data.scl %>%
   mutate(veh_body=as.factor(veh_body),area=as.factor(area),
          agecat=as.factor(agecat))
 #Priors for the regression coefficients.
-prior.beta <- list(mean.intercept = 0, prec.intercept =  3,
-                    mean = 0, prec = 3)
+prior.beta <- list(mean.intercept = 0, prec.intercept =  1,
+                    mean =0, 
+                   prec = list(veh_value=5,exposure=6,
+                               veh_body=0.3,veh_age=21,
+                               gender=1,area=13.7,agecat=4.5))
+
 #Fitting the model in INLA
 #"control.fixed=prior.beta" sets regression coeff. priors.
 results.car.logit.I <- inla(formula = clm ~ veh_value+exposure+veh_body+
