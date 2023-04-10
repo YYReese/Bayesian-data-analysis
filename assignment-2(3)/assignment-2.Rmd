@@ -36,7 +36,6 @@ require(insuranceData)
 require(dplyr)
 require(knitr)
 require(dummies)
-require(rjags)
 require(INLA)
 data(dataCar)
 
@@ -113,7 +112,7 @@ car.data.scl <- dataCar %>%
 ####Car data with categorical covariates - INLA ####
 car.inla.data <- car.data.scl %>% 
   select(veh_value, exposure,veh_body, 
-         veh_age, gender, area, agecat, clm) %>%
+         veh_age, gender, area, agecat, clm, numclaims) %>%
   mutate(veh_body=as.factor(veh_body),area=as.factor(area),
          agecat=as.factor(agecat),veh_age=as.factor(veh_age))
 ```
@@ -458,13 +457,13 @@ prior.beta.logit <- list(mean.intercept = 0, prec.intercept =  0.31,
 
 #Fitting the model in INLA
 #"control.fixed=prior.beta" sets regression coeff. priors.
-results.car.logit.I <- inla(formula = clm ~ veh_value+exposure+veh_body+
+results.car.logit <- inla(formula = clm ~ veh_value+exposure+veh_body+
                veh_age+gender+area+agecat, family="binomial",Ntrials=1,
              control.family=list(link="logit"),
-data=car.inla.data, control.fixed=prior.beta.logit,
-control.predictor = list(compute = TRUE,link=1),
-control.compute=list(config=TRUE))
-summary(results.car.logit.I)
+             data=car.inla.data, control.fixed=prior.beta.logit,
+             control.predictor = list(compute = TRUE,link=1),
+             control.compute=list(config=TRUE))
+summary(results.car.logit)
 
 ```
 
@@ -474,20 +473,20 @@ For the non-categorical variable, we need to transfer the coefficients back to t
 
 ```{r}
 cat("Regression coefficient for veh_value after transformation to the original scale: \n")
-results.car.logit.I$summary.fixed$mean[2] * sd(dataCar$veh_value)+mean(dataCar$veh_value)
+results.car.logit$summary.fixed$mean[2] * sd(dataCar$veh_value)+mean(dataCar$veh_value)
 
 cat("Regression coefficient for exposure after transformation to the original scale: \n")
-results.car.logit.I$summary.fixed$mean[3] * sd(dataCar$exposure)+mean(dataCar$exposure)
+results.car.logit$summary.fixed$mean[3] * sd(dataCar$exposure)+mean(dataCar$exposure)
 ```
 
 Now, we can compute the posterior mean of the model parameter ($p$) in Bernoulli distribution across different groups.
 
 ```{r}
-fittedvaluesm.I <- results.car.logit.I$summary.fitted.values$mean
-res.A <- car.data.scl %>% mutate(prob = ilogit(fittedvaluesm.I))
+fittedvaluesm.A <- results.car.logit$summary.fitted.values$mean
+res.A <- car.data.scl %>% mutate(prob = ilogit(fittedvaluesm.A))
 ```
 
-This is the posterior means of $p$ for different vehicle bodies. We see BUS has the highest claim probability while the convertible vehicle has the least probability to claim. Basically, we can get similar conclusion as the discussion in the previous part where the regression coefficients were discussed.
+These are the posterior means of $p$ for different vehicle bodies. We see BUS has the highest claim probability while the convertible vehicle has the least probability to claim. Basically, we can get similar conclusion as the discussion in the previous part where the regression coefficients were discussed.
 ```{r}
 res.A %>% 
   group_by(veh_body) %>%
@@ -556,8 +555,7 @@ control.compute=list(config=TRUE))
 ```
 
 
-Explanation (min 300 characters in your own words, otherwise -5 marks
-for insufficient explanation):
+
 
 
 **b)[10 marks] Fit a Bayesian Poisson regression model on numclaims as
@@ -588,16 +586,16 @@ car.inla2.data <- car.data.scl %>%
 
 mu.body <- c()
 for (i in 1:13){
-  body <- unique(car.inla2.data$veh_body)[i]
-  df.body <- car.inla2.data %>% filter(veh_body %in% c(body)) 
+  body <- unique(car.inla.data$veh_body)[i]
+  df.body <- car.inla.data %>% filter(veh_body %in% c(body)) 
   mu.body[i] <- mean(df.body$numclaims)
 }
 body.ratio <- max(mu.body)/min(mu.body)
 body.ratio 
 
 mu.gender <- c()
-df.m <- car.inla2.data %>% filter(gender %in% c("M"))
-df.f <- car.inla2.data %>% filter(gender %in% c("F"))
+df.m <- car.inla.data %>% filter(gender %in% c("M"))
+df.f <- car.inla.data %>% filter(gender %in% c("F"))
 mu.gender[1] <- mean(df.m$numclaims)
 mu.gender[2] <- mean(df.f$numclaims)
 gender.ratio <- max(mu.gender)/min(mu.gender)
@@ -605,8 +603,8 @@ gender.ratio
 
 mu.area <- c()
 for (i in 1:6){
-  a <- unique(car.inla2.data$area)[i]
-  df.area <- car.inla2.data %>% filter(area %in% c(a)) 
+  a <- unique(car.inla.data$area)[i]
+  df.area <- car.inla.data %>% filter(area %in% c(a)) 
   mu.area[i] <- mean(df.area$numclaims)
 }
 area.ratio <- max(mu.area)/min(mu.area)
@@ -614,8 +612,8 @@ area.ratio
 
 mu.agecat <- c()
 for (i in 1:6){
-  age <- unique(car.inla2.data$agecat)[i]
-  df.agecat <- car.inla2.data %>% filter(agecat %in% c(age)) 
+  age <- unique(car.inla.data$agecat)[i]
+  df.agecat <- car.inla.data %>% filter(agecat %in% c(age)) 
   mu.agecat[i] <- mean(df.agecat$numclaims)
 }
 agecat.ratio <- max(mu.agecat)/min(mu.agecat)
@@ -624,36 +622,106 @@ agecat.ratio
 
 mu.v_age <- c()
 for (i in 1:4){
-  v_age <- unique(car.inla2.data$veh_age)[i]
-  df.v_age <- car.inla2.data %>% filter(veh_age %in% c(v_age)) 
+  v_age <- unique(car.inla.data$veh_age)[i]
+  df.v_age <- car.inla.data %>% filter(veh_age %in% c(v_age)) 
   mu.v_age[i] <- mean(df.v_age$numclaims)
 }
 v_age.ratio <- max(mu.v_age)/min(mu.v_age)
 v_age.ratio
 ```
 
+For the choices of priors for the poisson regression, we first try to put $\mathcal{N}(0,1)$ on the intercept and $\mathcal{N}(0,0.1)$ on the other regression coefficients. The density of induced prior on model parameter $\mu$ in Poisson distribution is simulated below. We can see there is a hugh amount of probability mass between $0$ to $10$, as desired. We will continue with the choices of priors.
+```{r}
+beta0 <- rnorm(1000,sd=1)
+beta1 <- rnorm(1000,sd=0.2)
+beta2 <- rnorm(1000,sd=0.2)
+beta3 <- rnorm(1000,sd=0.2)
+beta4 <- rnorm(1000,sd=0.2)
+beta5 <- rnorm(1000,sd=0.2)
+beta6 <- rnorm(1000,sd=0.2)
+beta7 <- rnorm(1000,sd=0.2)
+x <- exp( beta0+beta1+beta2+beta3+beta4+beta5+beta6+beta7)
+plot(density(x),main="density of the induced prior on the parameter mu in Poisson")
+plot(density(exp(beta0)),main="density of the induced prior on the parameter mu in Poisson")
+```
+
+We fit the regression model in INLA using log as the link function. The results are summarised as follows.
 
 ```{r}
 
 #Priors for the regression coefficients.
-prior.beta.log.I <- list(mean.intercept = 0, prec.intercept =  0.5,
+prior.beta.log <- list(mean.intercept = 0, prec.intercept =  1,
                     mean =0, 
-                   prec = 1)
+                   prec = 25)
 #Fitting the model in INLA
 #"control.fixed=prior.beta" sets regression coeff. priors.
-results.car.log.I <- inla(formula = numclaims ~ veh_value+exposure+veh_body+
+results.car.log <- inla(formula = numclaims ~ veh_value+exposure+veh_body+
                veh_age+gender+area+agecat, family="poisson",
              control.family=list(link="log"),
-data=car.inla2.data, control.fixed=prior.beta.log,
-control.predictor = list(compute = TRUE,link=1),
-control.compute=list(config=TRUE))
-summary(results.car.log.I)
+             data=car.inla.data, control.fixed=prior.beta.log,
+             control.predictor = list(compute = TRUE,link=1),
+             control.compute=list(config=TRUE))
+summary(results.car.log)
+```
+For interpreting the coefficients we can exponentiate them. for the intercept, $e^{-2.451}=0.086$ represents the average number of claims of the reference category (i.e. the group with veh_body=BUS , veh_age=1, gender=M, area=A and agecat=1). The exponential function applied to the coefficients of the categorical factors provides the relative rate of the number of claims for different categories. For example, looking at the group veh_body=CONVT, $e^{-0.131}=0.877$, thus there is a $12.3\%$ decrease in the average rate of claims for convertible vehicle compared to the buses. The same interpretation can be extended to the other categorical covariates.
+
+
+For the non-categorical variable, we need to transfer the coefficients back to the original scale to better interpret the data. The transformed values are shown below. For the vehicle value, we expect $6.12$ times increase of the expected number of claims in every unit increase on the veh_value. Similarly, we expect $1.86$ times increase of the expected number of claims in every unit increase on the exposure. 
+
+```{r}
+cat("Regression coefficient for veh_value after transformation to the original scale: \n")
+results.car.log$summary.fixed$mean[2] * sd(dataCar$veh_value)+mean(dataCar$veh_value)
+cat("Take the exponential:\n")
+exp(results.car.log$summary.fixed$mean[2] * sd(dataCar$veh_value)+mean(dataCar$veh_value))
+
+cat("Regression coefficient for exposure after transformation to the original scale: \n")
+results.car.log$summary.fixed$mean[3] * sd(dataCar$exposure)+mean(dataCar$exposure)
+cat("Take the exponential:\n")
+exp(results.car.log$summary.fixed$mean[3] * sd(dataCar$exposure)+mean(dataCar$exposure))
 ```
 
-Explanation (min 300 characters in your own words, otherwise -5 marks
-for insufficient explanation):
+Now, we can compute the posterior mean of the model parameter ($\mu$) in Poisson distribution across different groups.
 
-We fit the regression model in INLA using log as the link function. For the regression coefficient corresponding to veh_value, $\beta_1$, we chose a normal prior $\mathcal{N}(0,\log2/27.2)$, as we believe an extreme case can have a mean at most $4$ times the mean of a typical number of claims. Similarly for the other three non-categorical regression coefficients, the priors are set to be $\mathcal{N}(0,\log4/1.83)$ for $beta_2$ that corresponds to exposure, $\mathcal{N}(0,1.24)$ for $\beta_3$ that corresponds to veh_age. 
+```{r}
+fittedvaluesm.B <- results.car.log$summary.fitted.values$mean
+res.B <- car.data.scl %>% mutate(numclaims.mu = exp(fittedvaluesm.B))
+```
+
+We summarise the posterior average number of claims across different groups. For different vehicle bodies, panel van seems to have the largest number of claims $1.096$, while the least number of claims is given by utility. 
+```{r}
+res.B %>% 
+  group_by(veh_body) %>%
+  summarise(mean_num_claims=mean(numclaims.mu))
+```
+
+There is no huge differences of female and male in terms of the mean number of claims made. 
+```{r}
+res.B %>% 
+  group_by(gender) %>%
+  summarise(mean_num_claims=mean(numclaims.mu))
+```
+For the covariate are, the area F has the largest mean number of claims while the area D has the smallest number of claims.
+```{r}
+res.B %>% 
+  group_by(area) %>%
+  summarise(mean_num_claims=mean(numclaims.mu))
+```
+
+The younger people tend to make slightly more claims on average, which is consistent with the conclusion in part a that they also have a higher probability of having a claim.
+```{r}
+res.B %>% 
+  group_by(agecat) %>%
+  summarise(mean_num_claims=mean(numclaims.mu))
+```
+
+The veh_age=2 group gets the highest number of claims on average while the veh_age=4 group gets the lowest number of claims on average. Groups veh_age=1 and veh_age=3 have similar values of mean number of claims.
+```{r}
+res.B %>% 
+  group_by(veh_age) %>%
+  summarise(mean_num_claims=mean(numclaims.mu))
+```
+
+
 
 **c)[10 marks]** **Fit a zero-inflated Bayesian Poisson regression model
 (<https://en.wikipedia.org/wiki/Zero-inflated_model>) on**
@@ -675,25 +743,24 @@ prior on the linear predictor and the response.]**
 **Compute the posterior means of the model parameters, and discuss the
 results.**
 
+First, we look at the number of claims in the dataset. The observed proportion of zero claims is $0.932$, indicating there is a large number of zeros in the response variable (numclaims). Thus, we fit zero-inflated Poisson regression model in INLA, by setting the argument `family = "zeroinflatedpoisson1"`.
 ```{r}
-car.poi.data.scl <- dataCar %>% 
-  select(veh_value, exposure,
-         veh_body, veh_age, gender, 
-         area, agecat, numclaims) %>%
-  mutate(veh_value=scale(veh_value), exposure=scale(exposure),
-         veh_age=scale(veh_age))
+round(prop.table(table(car.inla.data$numclaims)),5)
+```
 
+
+```{r}
 #Priors for the regression coefficients.
-prior.beta <- list(mean.intercept = 0, prec.intercept =  3,
-                    mean = 0, prec = 3)
+prior.beta.poi <- list(mean.intercept = 0, prec.intercept =  1,
+                       mean =0, prec = 25)
 #Fitting the model in INLA
 #"control.fixed=prior.beta" sets regression coeff. priors.
-results.car.poi <- inla(formula = clm ~ veh_value+exposure+veh_body+
+results.car.poi <- inla(formula = numclaims ~ veh_value+exposure+veh_body+
                veh_age+gender+area+agecat, family="zeroinflatedpoisson1",
              control.family=list(link="log"),
-data=car.inla.data, control.fixed=prior.beta,
-control.predictor = list(compute = TRUE,link=1),
-control.compute=list(config=TRUE))
+             data=car.inla.data, control.fixed=prior.beta.poi,
+             control.predictor = list(compute = TRUE,link=1),
+             control.compute=list(config=TRUE))
 summary(results.car.poi)
 ```
 
