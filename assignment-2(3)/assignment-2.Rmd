@@ -95,23 +95,41 @@ prior on the linear predictor and on the response.]**
 results.**
 
 ```{r}
-odds <- function(x) x/(1-x)
+# Define the functions 
+odds <- function(x) x/(1-x) # odds ratio function
+ilogit=function(x){ 1/(1+exp(-x))} #Inverse logistic function
 ```
 
-Data exploration
+In this part, we standardise two non-categorical covariates, veh_value and exposure, and convert veh_age to categorical variable.
+```{r}
+# Data preprocessing 
+car.data.scl <- dataCar %>% 
+  select(veh_value, exposure,veh_body, 
+         veh_age, gender, area, agecat, clm) %>% 
+  mutate(veh_value=scale(veh_value), 
+         exposure=scale(exposure))
+
+####Car data with categorical covariates - INLA ####
+car.inla.data <- car.data.scl %>% 
+  mutate(veh_body=as.factor(veh_body),area=as.factor(area),
+         agecat=as.factor(agecat),veh_age=as.factor(veh_age))
+```
+
+### Data exploration
+In the following, we compute the odds ratio of different groups of the data which might be useful for prior choices. 
 ```{r}
 odds.body <- c()
 for (i in 1:13){
-  body <- unique(dataCar$veh_body)[i]
-  df.body <- dataCar %>% filter(veh_body %in% c(body)) 
+  body <- unique(car.inla.data$veh_body)[i]
+  df.body <- car.inla.data %>% filter(veh_body %in% c(body)) 
   odds.body[i] <- odds(sum(df.body$clm == 1)/nrow(df.body))
 }
 body.ratio <- max(odds.body)/min(odds.body)
 body.ratio 
 
 odds.gender <- c()
-df.m <- dataCar %>% filter(gender %in% c("M"))
-df.f <- dataCar %>% filter(gender %in% c("F"))
+df.m <- car.inla.data %>% filter(gender %in% c("M"))
+df.f <- car.inla.data %>% filter(gender %in% c("F"))
 odds.gender[1] <- odds(sum(df.m$clm == 1)/nrow(df.m))
 odds.gender[2] <- odds(sum(df.f$clm == 1)/nrow(df.f))
 gender.ratio <- max(odds.gender)/min(odds.gender)
@@ -119,8 +137,8 @@ gender.ratio
 
 odds.area <- c()
 for (i in 1:6){
-  a <- unique(dataCar$area)[i]
-  df.area <- dataCar %>% filter(area %in% c(a)) 
+  a <- unique(car.inla.data$area)[i]
+  df.area <- car.inla.data %>% filter(area %in% c(a)) 
   odds.area[i] <- odds(sum(df.area$clm == 1)/nrow(df.area))
 }
 area.ratio <- max(odds.area)/min(odds.area)
@@ -128,8 +146,8 @@ area.ratio
 
 odds.agecat <- c()
 for (i in 1:6){
-  age <- unique(dataCar$agecat)[i]
-  df.agecat <- dataCar %>% filter(agecat %in% c(age)) 
+  age <- unique(car.inla.data$agecat)[i]
+  df.agecat <- car.inla.data %>% filter(agecat %in% c(age)) 
   odds.agecat[i] <- odds(sum(df.agecat$clm == 1)/nrow(df.agecat))
 }
 agecat.ratio <- max(odds.agecat)/min(odds.agecat)
@@ -138,24 +156,41 @@ agecat.ratio
 
 odds.v_age <- c()
 for (i in 1:4){
-  v_age <- unique(dataCar$veh_age)[i]
-  df.v_age <- dataCar %>% filter(veh_age %in% c(v_age)) 
+  v_age <- unique(car.inla.data$veh_age)[i]
+  df.v_age <- car.inla.data %>% filter(veh_age %in% c(v_age)) 
   odds.v_age[i] <- odds(sum(df.v_age$clm == 1)/nrow(df.v_age))
 }
 v_age.ratio <- max(odds.v_age)/min(odds.v_age)
 v_age.ratio
+
 ```
+From the results, we can see that for veh_body, the odds ratio of one group can be at most $6$ times lager than that of another group. For gender, the odds ratio of female is $0.017$ times lager than that of male. For area, the odds ratio of one group is at most $1.314$ times larger than that of another group. For agecat, the odds ratio of one group is at most $1.601$ times larger than that of another group. For veh_age, the odds ratio of one group is at most $1.239$ times larger than that of another group. Using the information, we set the priors for the regression coefficients of linear predictors as follows.
+\begin{itemize}
+  \item For veh_body: we want $e^{\beta_3}$ to have large mass at around $6$, so it is reasonable to set prior $\mathcal{N}(0,\sigma_3^2)$ where $\sigma_3=\ln 6$. 
+  \item For gender: we want $e^{\beta_5}$ to have large mass at around $1.02$, so we may like to put prior $\mathcal{N}(0,\sigma_5^2)$ where $\sigma_5=\ln 1.02$. However, this looks a bit informative, so we let $\sigma_5=1$ instead. It cause no problem to change the prior to make it vaguer. 
+  \item For area: we want $e^{\beta_6}$ to have large mass at around $1.31$, so it is reasonable to set prior $\mathcal{N}(0,\sigma_6^2)$ where $\sigma_6=\ln 1.31$. 
+  \item For agecat: we want $e^{\beta_7}$ to have large mass at around $1.6$, so it is reasonable to set prior $\mathcal{N}(0,\sigma_7^2)$ where $\sigma_7=\ln 1.6$. 
+  \item For veh_age: we want $e^{\beta_4}$ to have large mass at around $1.24$, so it is reasonable to set prior $\mathcal{N}(0,\sigma_6^2)$ where $\sigma_6=\ln 1.24$. 
+  \item For veh_value: we want $e^{\beta_1 x_1}$ to have large mass at around $5$. Having checked the density of scaled value of veh_value variable, we think it takes values mostly between $0$ to $5$. Therefore, it is sensible to set prior $\mathcal{N}(0,\sigma_1^2)$ where $\sigma_1=\ln 5/5$. 
+  \item For exposure: we want $e^{\beta_2 x_2}$ to have large mass at around $1.5$. Having check the density of scaled value of exposure, we found it takes values mostly within $-1$ to $1$. Therefore, it is sensible to set prior $\mathcal{N}(0,\sigma_2^2)$ where $\sigma_2=\ln 1.5/1=\ln 1.5$. 
+  For the intercept $beta_0$: we want to ensure that the inverse logit of $30$ times $|\beta_0|$ can be in the interval $(-0.05,0.95)$. (Here $30$ is roughly the exponential of all the covariates' effects, i.e. $50\approx e^{\beta_1 x_1 \beta_2 x_2 ...\beta_7}$.) Hence, we come up with the prior $\mathcal{N}(0, \sigma_0)$ for $\beta_0$ where $\sigma_0=log(6)$.
+\end{itemize}
 
-
-Preprocessing
+Now let us see the induced prior on the probability parameter in Bernoulli distribution $p_i$. We simulate $1000$ points for each beta. Assume we have each all non-categorical covariates equal to 1 (after scaling) and randomly choose a group for all the categorical variables. Then we can compute the responses. After that, the inverse logit of the responses can be computed so that we can plot the density of the probability parameter in Bernoulli distribution, $p_i$. From the following plot, we can see the induced prior on $\mu$ looks okay. We have also tried different values of $x_1,x_2,...$ and the results showed no problem, so we continue with our choices of priors.
 ```{r}
-car.data <- dataCar %>% select(veh_value, exposure, 
-                               veh_body, veh_age, gender, 
-                               area, agecat, clm)
-car.data.scl <- car.data %>% 
-  mutate(veh_value=scale(veh_value), exposure=scale(exposure),
-         veh_age=scale(veh_age))
+beta0 <- rnorm(1000,sd=1.79)
+beta1 <- rnorm(1000,sd=log(5)/5)
+beta2 <- rnorm(1000,sd=log(1.5))
+beta3 <- rnorm(1000,sd=log(6))
+beta4 <- rnorm(1000,sd=log(1.24))
+beta5 <- rnorm(1000,sd=log(1.02))
+beta6 <- rnorm(1000,sd=log(1.31))
+beta7 <- rnorm(1000,sd=log(1.6))
+x <- ilogit( beta0+beta1+beta2+beta3+beta4+beta5+beta6+beta7)
+plot(density(x),main="density of the induced prior on the parameter p in Bernoulli")
 ```
+
+
 
 Data block
 ```{r}
@@ -406,14 +441,12 @@ mean(ilogit(results.beetles.output$beta0)),3),"\n")
 
 
 
-INLA
+### Multiple regression in INLA
+
+In this part, we fit the multiple regression model in INLA using the priors we chosen in the previous part. The mean of the regression coefficients can be found in the first column of the summary results. For the categorical covariates with the number of catogories $k$, INLA will automatically create $k-1$ indicators.
 ```{r}
-####Car data with categorical covariates - INLA ####
-car.inla.data <- car.data.scl %>% 
-  mutate(veh_body=as.factor(veh_body),area=as.factor(area),
-         agecat=as.factor(agecat))
 #Priors for the regression coefficients.
-prior.beta <- list(mean.intercept = 0, prec.intercept =  1,
+prior.beta <- list(mean.intercept = 0, prec.intercept =  0.31,
                     mean =0, 
                    prec = list(veh_value=5,exposure=6,
                                veh_body=0.3,veh_age=21,
@@ -430,6 +463,8 @@ control.compute=list(config=TRUE))
 summary(results.car.logit.I)
 
 ```
+
+As we created the reference group to be veh_body=BUS, gender=F, area=1,agecat=1, veh_age=1, the intercept $\beta_0$ reflects the scaled log odds ratio of this reference group. We can compute the mean of $p$ of the reference group, which is `r ilogit(-1.351)`. Hence, for the reference group, the probability of a claim is around $0.2$. For categorical covariate veh_body, we see the regression coefficient for motorized caravan is the smallest among all the groups, which indicates that when other factors remain the same, motorized caravan is most likely to have a claim.
 ```{r}
 cat("The posterior means of the model parameters are:\n")
 param.means <- results.car.logit.I$summary.fixed[,1]
