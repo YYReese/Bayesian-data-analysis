@@ -97,7 +97,8 @@ results.**
 ```{r}
 # Define the functions 
 odds <- function(x) x/(1-x) # odds ratio function
-ilogit=function(x){ 1/(1+exp(-x))} #Inverse logistic function
+logit <- function(x) log(x/(1-x))
+ilogit <- function(x){ 1/(1+exp(-x))} #Inverse logistic function
 ```
 
 In this part, we standardise two non-categorical covariates, veh_value and exposure, and convert veh_age to categorical variable.
@@ -105,12 +106,14 @@ In this part, we standardise two non-categorical covariates, veh_value and expos
 # Data preprocessing 
 car.data.scl <- dataCar %>% 
   select(veh_value, exposure,veh_body, 
-         veh_age, gender, area, agecat, clm) %>% 
+         veh_age, gender, area, agecat, clm,numclaims) %>% 
   mutate(veh_value=scale(veh_value), 
          exposure=scale(exposure))
 
 ####Car data with categorical covariates - INLA ####
 car.inla.data <- car.data.scl %>% 
+  select(veh_value, exposure,veh_body, 
+         veh_age, gender, area, agecat, clm) %>%
   mutate(veh_body=as.factor(veh_body),area=as.factor(area),
          agecat=as.factor(agecat),veh_age=as.factor(veh_age))
 ```
@@ -442,11 +445,12 @@ mean(ilogit(results.beetles.output$beta0)),3),"\n")
 
 
 ### Multiple regression in INLA
+The logistic regression model using the required covariates was implemented in INLA. In previous part, we have standerdise the non-categorical covariates so that the mean is 1 and standered deviation is $1$ for each non-categorical covariate. For categorical covariates, INLA will automatically create $k-1$ indicators, where $k$ is the number of catogories for certain covariate. The link function is chosen to be the logit function in our model.
 
-In this part, we fit the multiple regression model in INLA using the priors we chosen in the previous part. The mean of the regression coefficients can be found in the first column of the summary results. For the categorical covariates with the number of catogories $k$, INLA will automatically create $k-1$ indicators.
+The results are shown below. The mean of the regression coefficients can be found in the first column of the summary results.
 ```{r}
 #Priors for the regression coefficients.
-prior.beta <- list(mean.intercept = 0, prec.intercept =  0.31,
+prior.beta.logit <- list(mean.intercept = 0, prec.intercept =  0.31,
                     mean =0, 
                    prec = list(veh_value=5,exposure=6,
                                veh_body=0.3,veh_age=21,
@@ -457,18 +461,64 @@ prior.beta <- list(mean.intercept = 0, prec.intercept =  0.31,
 results.car.logit.I <- inla(formula = clm ~ veh_value+exposure+veh_body+
                veh_age+gender+area+agecat, family="binomial",Ntrials=1,
              control.family=list(link="logit"),
-data=car.inla.data, control.fixed=prior.beta,
+data=car.inla.data, control.fixed=prior.beta.logit,
 control.predictor = list(compute = TRUE,link=1),
 control.compute=list(config=TRUE))
 summary(results.car.logit.I)
 
 ```
 
-As we created the reference group to be veh_body=BUS, gender=F, area=1,agecat=1, veh_age=1, the intercept $\beta_0$ reflects the scaled log odds ratio of this reference group. We can compute the mean of $p$ of the reference group, which is `r ilogit(-1.351)`. Hence, for the reference group, the probability of a claim is around $0.2$. For categorical covariate veh_body, we see the regression coefficient for motorized caravan is the smallest among all the groups, which indicates that when other factors remain the same, motorized caravan is most likely to have a claim.
+As we created the reference group to be veh_body=BUS, gender=F, area=1,agecat=1, veh_age=1, the intercept $\beta_0$ reflects the scaled log odds ratio of this reference group. We can compute the mean of $p$ of the reference group, which is `r ilogit(-1.351)`. Hence, for the reference group, the probability of a claim is around $0.2$. For categorical covariate veh_body, the regression coefficient for each group is negative, indicating that all other vehicle categories have the probability of a claim lower than the BUS, and thus BUS is the one that most probable to have a claim. In addition, we see the regression coefficient for motorized caravan is the smallest among all the groups, which indicates that when other factors remain the same, motorized caravan is most likely to have a claim (apart from BUS). Similarly, we found the convertible vehicle is the least likely to have a claim, as the regression coefficient is the smallest among all the vehicle categories. For the covariate veh_age, we observe a increase trend in the regression coefficients. Therefore, we may believe that as the vehicle get older, the probability of a claim decreases. For the covariate gender, the regression coefficient is $-0.019$ for female. After taking the exponential, we can say the female have roughly $0.02$ less chance to claim than male. For covariate area, the regression coefficients for area B and F are positive, showing higher probabilities of a claim compared with the area A. The regression coefficients for area D and E are negative, showing lower probabilities of a claim compared with the area A. For the covariate agecat, we see the younger groups of people seem to have a larger probability to claim. 
+
+For the non-categorical variable, we need to transfer the coefficients back to the original scale to better interpret the data. The transformed values are shown below. For the vehicle value, we expect $1.82$ times increase of the log odds ratio in every unit increase on the veh_value. Similarly, we expect $0.63$ times increase of the log odds ratio in every unit increase on the exposure. 
+
 ```{r}
-cat("The posterior means of the model parameters are:\n")
-param.means <- results.car.logit.I$summary.fixed[,1]
-param.means
+cat("Regression coefficient for veh_value after transformation to the original scale: \n")
+results.car.logit.I$summary.fixed$mean[2] * sd(dataCar$veh_value)+mean(dataCar$veh_value)
+
+cat("Regression coefficient for exposure after transformation to the original scale: \n")
+results.car.logit.I$summary.fixed$mean[3] * sd(dataCar$exposure)+mean(dataCar$exposure)
+```
+
+Now, we can compute the posterior mean of the model parameter ($p$) in Bernoulli distribution across different groups.
+
+```{r}
+fittedvaluesm.I <- results.car.logit.I$summary.fitted.values$mean
+res.A <- car.data.scl %>% mutate(prob = ilogit(fittedvaluesm.I))
+```
+
+This is the posterior means of $p$ for different vehicle bodies. We see BUS has the highest claim probability while the convertible vehicle has the least probability to claim. Basically, we can get similar conclusion as the discussion in the previous part where the regression coefficients were discussed.
+```{r}
+res.A %>% 
+  group_by(veh_body) %>%
+  summarise(p.mu=mean(prob))
+```
+
+Female seems to have a slightly higher probability to claim. The difference is not significant though.
+```{r}
+res.A %>% 
+  group_by(gender) %>%
+  summarise(p.mu=mean(prob))
+```
+The oldest group of vehicle tends to be less likely to have a claim.
+```{r}
+res.A %>% 
+  group_by(veh_age) %>%
+  summarise(p.mu=mean(prob))
+```
+
+The younger groups of people tends to have a higher probability to claim
+```{r}
+res.A %>% 
+  group_by(agecat) %>%
+  summarise(p.mu=mean(prob))
+```
+
+Area F is the area where the probaility of a claim is the largest across different area. Area D is where the probaility of a claim is the smallest.
+```{r}
+res.A %>% 
+  group_by(area) %>%
+  summarise(p.mu=mean(prob))
 ```
 
 ```{r}
@@ -481,16 +531,6 @@ newdata <-
 fittedvaluesm <- param.means[1]+param.means[2]*car.inla.data
 ```
 
-
-```{r}
-fittedvaluesm.I <- results.car.logit.I$summary.fitted.values$mean
-ilogit=function(x){ 1/(1+exp(-x))} #Inverse logistic function
-
-cat("E[ilogit(beta0+beta1x+...)] is",
-round(mean(ilogit(fittedvaluesm.I)),3),"\n")
-
-#fitted.post.pred=rbinom(n=nrow(car.inla.data), size=1, prob=fittedvalues.I)
-```
 
 
 ```{r}
@@ -519,9 +559,6 @@ control.compute=list(config=TRUE))
 Explanation (min 300 characters in your own words, otherwise -5 marks
 for insufficient explanation):
 
-The logistic regression model using the required covariates was implemented in INLA. First, we standerdise the non-categorical covariates so that the mean is 1 and standered deviation is $1$ for each non-categorical covariate. For categorical covariates, INLA will automatically create $k-1$ indicators, where $k$ is the number of catogories for certain covariate. The link function is chosen to be the logit function in our model.
-
-For the choice of priors, we follow the common choice of normal distribution in general. Since we believe the typical probability of a claim is between $0.05 \sim 0.95$, then $\log(1/19)<\log(\frac{p}{1-p})<\log(19)$. Equivalently, we would like the intercept $\beta_0$ to mostly take values from $\log(1/19)$ to $\log(19)$. Therefore, the prior for $\beta_0$ is set to be $\mathcal{N}\left(0,\frac{\log(1/19)}{3}\right)$. For 
 
 **b)[10 marks] Fit a Bayesian Poisson regression model on numclaims as
 response with**
@@ -541,16 +578,73 @@ prior on the linear predictor and the response.]**
 **Compute the posterior means of the model parameters, and discuss the
 results.**
 
+We adopt a similar strategy for choosing priors as in part (a). However, here we look at the probability of each group instead of the odds ratio.
 ```{r}
+# dataset
+car.inla2.data <- car.data.scl %>% 
+  filter(clm==1)%>%
+  select(veh_value, exposure,veh_body, 
+         veh_age, gender, area, agecat, numclaims)
+
+mu.body <- c()
+for (i in 1:13){
+  body <- unique(car.inla2.data$veh_body)[i]
+  df.body <- car.inla2.data %>% filter(veh_body %in% c(body)) 
+  mu.body[i] <- mean(df.body$numclaims)
+}
+body.ratio <- max(mu.body)/min(mu.body)
+body.ratio 
+
+mu.gender <- c()
+df.m <- car.inla2.data %>% filter(gender %in% c("M"))
+df.f <- car.inla2.data %>% filter(gender %in% c("F"))
+mu.gender[1] <- mean(df.m$numclaims)
+mu.gender[2] <- mean(df.f$numclaims)
+gender.ratio <- max(mu.gender)/min(mu.gender)
+gender.ratio
+
+mu.area <- c()
+for (i in 1:6){
+  a <- unique(car.inla2.data$area)[i]
+  df.area <- car.inla2.data %>% filter(area %in% c(a)) 
+  mu.area[i] <- mean(df.area$numclaims)
+}
+area.ratio <- max(mu.area)/min(mu.area)
+area.ratio
+
+mu.agecat <- c()
+for (i in 1:6){
+  age <- unique(car.inla2.data$agecat)[i]
+  df.agecat <- car.inla2.data %>% filter(agecat %in% c(age)) 
+  mu.agecat[i] <- mean(df.agecat$numclaims)
+}
+agecat.ratio <- max(mu.agecat)/min(mu.agecat)
+agecat.ratio
+
+
+mu.v_age <- c()
+for (i in 1:4){
+  v_age <- unique(car.inla2.data$veh_age)[i]
+  df.v_age <- car.inla2.data %>% filter(veh_age %in% c(v_age)) 
+  mu.v_age[i] <- mean(df.v_age$numclaims)
+}
+v_age.ratio <- max(mu.v_age)/min(mu.v_age)
+v_age.ratio
+```
+
+
+```{r}
+
 #Priors for the regression coefficients.
-prior.beta.log <- list(mean.intercept = 0, prec.intercept =  3,
-                    mean = 0, prec = 3)
+prior.beta.log.I <- list(mean.intercept = 0, prec.intercept =  0.5,
+                    mean =0, 
+                   prec = 1)
 #Fitting the model in INLA
 #"control.fixed=prior.beta" sets regression coeff. priors.
-results.car.log.I <- inla(formula = clm ~ veh_value+exposure+veh_body+
-               veh_age+gender+area+agecat, family="binomial",Ntrials=1,
+results.car.log.I <- inla(formula = numclaims ~ veh_value+exposure+veh_body+
+               veh_age+gender+area+agecat, family="poisson",
              control.family=list(link="log"),
-data=car.inla.data, control.fixed=prior.beta.log,
+data=car.inla2.data, control.fixed=prior.beta.log,
 control.predictor = list(compute = TRUE,link=1),
 control.compute=list(config=TRUE))
 summary(results.car.log.I)
