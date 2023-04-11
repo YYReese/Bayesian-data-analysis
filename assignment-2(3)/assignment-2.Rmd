@@ -566,22 +566,22 @@ models.**
 **Discuss the results.**
 
 ```{r}
-nbsamp <- 100
+nbsamp <- 1000
 n <- nrow(car.inla.data)
 yrep.b <- matrix(0,nrow=n,ncol=nbsamp)
 yrep.c <- matrix(0,nrow=n,ncol=nbsamp)
-yrep.d <- matrix(0,nrow=n,ncol=nbsamp)
+#yrep.d <- matrix(0,nrow=n,ncol=nbsamp)
 
 car.b.samples=inla.posterior.sample(n=nbsamp, result=results.car.log)
 car.c.samples=inla.posterior.sample(n=nbsamp, result=results.car.poi)
-car.d.samples=inla.posterior.sample(n=nbsamp, result=results.car.poi.rd)
+#car.d.samples=inla.posterior.sample(n=nbsamp, result=results.car.poi.rd)
 
 predictor.b.samples=inla.posterior.sample.eval(function(...) {Predictor},
 car.b.samples)
 predictor.c.samples=inla.posterior.sample.eval(function(...) {Predictor},
 car.c.samples)
-predictor.d.samples=inla.posterior.sample.eval(function(...) {Predictor},
-car.d.samples)
+#predictor.d.samples=inla.posterior.sample.eval(function(...) {Predictor},
+#car.d.samples)
 
 for (row.num in 1:n){   
 yrep.b[row.num,]<- rpois(n=nbsamp,
@@ -590,6 +590,20 @@ yrep.c[row.num,]<- rpois(n=nbsamp,
                          lambda=exp(predictor.c.samples[row.num,]))    
 }
 ```
+
+```{r}
+rmse(car.inla.data$numclaims,rowMeans(yrep.b))
+rmse(car.inla.data$numclaims,rowMeans(yrep.c))
+```
+
+
+```{r}
+
+barplot(table(yrep.b)/ncol(yrep.b),xlab="y",
+        ylab="Pr(y* |y )")
+```
+
+
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
 for insufficient explanation):
@@ -699,9 +713,41 @@ prior on the response.]**
 **Compute the posterior means of the model parameters, and interpret
 their meaning.**
 
+Data preprocessing.
 ```{r}
+study.data.scl <- study %>% 
+  select(gender, on_a_diet, alcohol, drugs, sick, other_factors, 
+         education, smoke,no2gps_24h, maxwindspeed_24h,precip_24h,
+         sec_noise55_day,access_greenbluespaces_300mbuff,age_yrs,
+         tmean_24h, stroop_test_performance, sadness) %>%
+  mutate(no2gps_24h=scale(no2gps_24h),maxwindspeed_24h=scale(maxwindspeed_24h),
+         precip_24h=scale(precip_24h),sec_noise55_day=scale(sec_noise55_day),
+         age_yrs=scale(age_yrs),tmean_24h=scale(tmean_24h))
 
 ```
+
+```{r}
+#Priors for the regression coefficients.
+prior.beta.a <- list(mean.intercept = 0, prec.intercept =  0.01,
+                       mean =0, prec = 0.1)
+
+prec.prior <- list(prec=list(prior = "loggamma", param = c(0.1, 0.1)))
+#Fitting the model in INLA
+#"control.fixed=prior.beta" sets regression coeff. priors.
+results.study.a <- inla(formula = stroop_test_performance ~ gender+on_a_diet+
+                          alcohol+drugs+sick+other_factors+education+smoke+
+                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h,
+                        family="gaussian",
+                        control.family=list(hyper=prec.prior),
+                        data=study.data.scl, control.fixed=prior.beta.a,
+                        control.predictor = list(compute = TRUE),
+                        control.compute=list(config=TRUE))
+summary(results.study.a)
+```
+
+
+
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
 for insufficient explanation):
