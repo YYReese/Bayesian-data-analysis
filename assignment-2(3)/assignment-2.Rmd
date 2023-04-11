@@ -212,7 +212,7 @@ results.car.logit <- inla(formula = clm ~ veh_value+exposure+veh_body+
              control.family=list(link="logit"),
              data=car.inla.data, control.fixed=prior.beta.logit,
              control.predictor = list(compute = TRUE,link=1),
-             control.compute=list(config=TRUE))
+             control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
 summary(results.car.logit)
 
 ```
@@ -371,7 +371,7 @@ results.car.log <- inla(formula = numclaims ~ veh_value+exposure+veh_body+
              control.family=list(link="log"),
              data=car.inla.data, control.fixed=prior.beta.log,
              control.predictor = list(compute = TRUE,link=1),
-             control.compute=list(config=TRUE))
+             control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
 summary(results.car.log)
 ```
 For interpreting the coefficients we can exponentiate them. for the intercept, $e^{-2.451}=0.086$ represents the average number of claims of the reference category (i.e. the group with veh_body=BUS , veh_age=1, gender=M, area=A and agecat=1). The exponential function applied to the coefficients of the categorical factors provides the relative rate of the number of claims for different categories. For example, looking at the group veh_body=CONVT, $e^{-0.131}=0.877$, thus there is a $12.3\%$ decrease in the average rate of claims for convertible vehicle compared to the buses. The same interpretation can be extended to the other categorical covariates.
@@ -471,7 +471,7 @@ results.car.poi <- inla(formula = numclaims ~ veh_value+exposure+veh_body+
              control.family=list(link="log"),
              data=car.inla.data, control.fixed=prior.beta.poi,
              control.predictor = list(compute = TRUE,link=1),
-             control.compute=list(config=TRUE))
+             control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
 summary(results.car.poi)
 ```
 
@@ -537,13 +537,14 @@ prior.beta.poi <- list(mean.intercept = 0, prec.intercept =  1,
                        mean =0, prec = 25)
 #Fitting the model in INLA
 
-results.car.poi.rd <- inla(formula = numclaims ~ veh_value+exposure+
-               veh_age+gender*agecat+f(area, model="iid")+f(veh_body, model="iid"), 
+results.car.poi.rd <- inla(formula = numclaims ~ veh_value*exposure+
+                             veh_body+veh_age+gender+agecat+
+                             f(area, model="iid"), 
                family="zeroinflatedpoisson1",
              control.family=list(link="log"),
              data=car.inla.data, control.fixed=prior.beta.poi,
              control.predictor = list(compute = TRUE,link=1),
-             control.compute=list(config=TRUE))
+             control.compute=list(config=TRUE, dic=TRUE, cpo=TRUE))
 summary(results.car.poi.rd)
 ```
 
@@ -722,19 +723,32 @@ study.data.scl <- study %>%
          tmean_24h, stroop_test_performance, sadness) %>%
   mutate(no2gps_24h=scale(no2gps_24h),maxwindspeed_24h=scale(maxwindspeed_24h),
          precip_24h=scale(precip_24h),sec_noise55_day=scale(sec_noise55_day),
-         age_yrs=scale(age_yrs),tmean_24h=scale(tmean_24h))
+         age_yrs=scale(age_yrs),tmean_24h=scale(tmean_24h),
+         log.stroop_test_performance=scale(log(stroop_test_performance)))
 
 ```
 
 ```{r}
+x <- matrix(nrow=1000,ncol=15)
+x[,1] <- rnorm(1000,sd=sqrt(10))
+for (i in 2:15){
+  x[,i] <- rnorm(1000,sd=sqrt(1))
+}
+plot(density((rowSums(x))))
+
+```
+
+
+
+```{r}
 #Priors for the regression coefficients.
-prior.beta.a <- list(mean.intercept = 0, prec.intercept =  0.01,
-                       mean =0, prec = 0.1)
+prior.beta.a <- list(mean.intercept = 0, prec.intercept =  0.1,
+                       mean =0, prec = 1)
 
 prec.prior <- list(prec=list(prior = "loggamma", param = c(0.1, 0.1)))
 #Fitting the model in INLA
 #"control.fixed=prior.beta" sets regression coeff. priors.
-results.study.a <- inla(formula = stroop_test_performance ~ gender+on_a_diet+
+results.study.a <- inla(formula = log.stroop_test_performance ~ gender+on_a_diet+
                           alcohol+drugs+sick+other_factors+education+smoke+
                           no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
                           access_greenbluespaces_300mbuff+age_yrs+tmean_24h,
@@ -742,7 +756,7 @@ results.study.a <- inla(formula = stroop_test_performance ~ gender+on_a_diet+
                         control.family=list(hyper=prec.prior),
                         data=study.data.scl, control.fixed=prior.beta.a,
                         control.predictor = list(compute = TRUE),
-                        control.compute=list(config=TRUE))
+                        control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
 summary(results.study.a)
 ```
 
@@ -776,7 +790,52 @@ prior on the response.]**
 their meaning.**
 
 ```{r}
+mm=model.matrix(sadness~  gender+on_a_diet+
+                          alcohol+drugs+sick+other_factors+education+smoke+
+                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h,data=study.data.scl)
+var.beta=5/quantile(rowSums(mm^2),0.5)
+cat("Variance of regression coefficients:",var.beta, "\n")
 
+```
+
+```{r}
+x <- matrix(nrow=1000,ncol=15)
+x[,1] <- rnorm(1000,mean=0,sd=sqrt(2))
+for (i in 2:15){
+  x[,i] <- rnorm(1000,mean=0,sd=sqrt(0.5 ))
+}
+plot(density((rowSums(x))),xlim=c(-5,50))
+plot(density((x[,1])),xlim=c(-5,50))
+```
+```{r}
+glm(sadness ~ gender+on_a_diet+
+                          alcohol+drugs+sick+other_factors+education+smoke+
+                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h,
+    family=poisson(link="log"),data=study.data.scl)
+```
+
+
+```{r}
+#Priors for the regression coefficients.
+prior.beta.b <- list(mean.intercept = 0, prec.intercept =  1/10,
+                       mean =0, prec = 1)
+
+
+
+#Fitting the model in INLA
+#"control.fixed=prior.beta" sets regression coeff. priors.
+results.study.b <- inla(formula = sadness ~ gender+on_a_diet+
+                          alcohol+drugs+sick+other_factors+education+smoke+
+                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h,
+                        family="poisson",
+                        control.family=list(link="log"),
+                        data=study.data.scl, control.fixed=prior.beta.b,
+                        control.predictor = list(compute = TRUE,link=1),
+                        control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
+summary(results.study.b)
 ```
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
