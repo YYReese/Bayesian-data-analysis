@@ -475,7 +475,9 @@ results.car.poi <- inla(formula = numclaims ~ veh_value+exposure+veh_body+
 summary(results.car.poi)
 ```
 
-From the results, we can see the probability of having no claims is $0.297$, with a $95\%$ credible interval $(0.219,0.299)$.
+From the results, we can see the probability of having no claims is $0.297$, with a $95\%$ credible interval $(0.219,0.299)$. The probability of having claims is thus $0.703$, and the number of claims are given by the model process specified in the question. Notice that the intercept is $-2.101$. After taking the exponential, the we get $e^{-2.101}=0.1223$ for zero-inflated Poisson regression. We can thus compute the expectation of the number of claims of the reference group by $0.703\times 0.1223+0.297 \times 0=0.0860$. Note that this is slightly lower than the mean number of claims of the reference group given by the model in part (b) (which is $0.0862$). The interpretations of the regression coefficients are similar as part (b), except we are now conditioning on that there is a claim (or claims). Otherwise, the probability of no claim is $0.297$.
+
+We can also compute the posterior mean number of claims of different categories. All the values are now generally lower than values we got in part (b) using standard Poisson GLM. Moreover, we observe similar facts as in part (b); e.g. for different vehicle bodies, panel van seems to have the largest mean number of claims, while the least mean number of claims is given by utility. 
 
 ```{r}
 fittedvaluesm.C <- results.car.poi$summary.fitted.values$mean
@@ -485,7 +487,7 @@ res.C <- car.data.scl %>% mutate(numclaims.mu = exp(fittedvaluesm.C))
 ```{r}
 res.C %>% 
   group_by(veh_body) %>%
-  summarise(mean_num_claims=mean(numclaims.mu))
+  summarise(mean_num_claims=mean(numclaims.mu)*0.703)
 ```
 
 ```{r}
@@ -514,8 +516,7 @@ res.C %>%
 
 
 
-Explanation (min 300 characters in your own words, otherwise -5 marks
-for insufficient explanation):
+
 
 **d)[10 marks] Fit a new model on numclaims in terms of the same
 covariates to improve on the models in part b) or part c) by considering
@@ -531,8 +532,24 @@ prior on the linear predictor and the response.]**
 results.**
 
 ```{r}
+#Priors for the regression coefficients.
+prior.beta.poi <- list(mean.intercept = 0, prec.intercept =  1,
+                       mean =0, prec = 25)
+#Fitting the model in INLA
 
+results.car.poi.rd <- inla(formula = numclaims ~ veh_value+exposure+
+               veh_age+gender*agecat+f(area, model="iid")+f(veh_body, model="iid"), 
+               family="zeroinflatedpoisson1",
+             control.family=list(link="log"),
+             data=car.inla.data, control.fixed=prior.beta.poi,
+             control.predictor = list(compute = TRUE,link=1),
+             control.compute=list(config=TRUE))
+summary(results.car.poi.rd)
 ```
+
+
+
+
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
 for insufficient explanation):
@@ -549,6 +566,29 @@ models.**
 **Discuss the results.**
 
 ```{r}
+nbsamp <- 100
+n <- nrow(car.inla.data)
+yrep.b <- matrix(0,nrow=n,ncol=nbsamp)
+yrep.c <- matrix(0,nrow=n,ncol=nbsamp)
+yrep.d <- matrix(0,nrow=n,ncol=nbsamp)
+
+car.b.samples=inla.posterior.sample(n=nbsamp, result=results.car.log)
+car.c.samples=inla.posterior.sample(n=nbsamp, result=results.car.poi)
+car.d.samples=inla.posterior.sample(n=nbsamp, result=results.car.poi.rd)
+
+predictor.b.samples=inla.posterior.sample.eval(function(...) {Predictor},
+car.b.samples)
+predictor.c.samples=inla.posterior.sample.eval(function(...) {Predictor},
+car.c.samples)
+predictor.d.samples=inla.posterior.sample.eval(function(...) {Predictor},
+car.d.samples)
+
+for (row.num in 1:n){   
+yrep.b[row.num,]<- rpois(n=nbsamp,
+                         lambda=exp(predictor.b.samples[row.num,]))
+yrep.c[row.num,]<- rpois(n=nbsamp,
+                         lambda=exp(predictor.c.samples[row.num,]))    
+}
 ```
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
