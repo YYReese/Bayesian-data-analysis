@@ -193,256 +193,6 @@ plot(density(x),main="density of the induced prior on the parameter p in Bernoul
 ```
 
 
-
-Data block
-```{r}
-n <- nrow(car.data)
-body.dum <- dummy(car.data.ctr$veh_body)
-agecat.dum <- dummy(car.data.ctr$agecat)
-gen.dum <- dummy(car.data.ctr$gender)
-area.dum <- dummy(car.data.ctr$area)
-car.logit.data <- list(n=n, body=body.dum[,-1],
-                     agecat=agecat.dum[,-1],
-                     gender=gen.dum[,-1],
-                     area=area.dum[,-1],
-                     veh_value=car.data.ctr$veh_value,
-                     exposure=car.data.ctr$exposure,
-                     veh_age=car.data.ctr$veh_age)
-
-car.logit.data2 <- list(n=n, body.convt=body.dum[,2],
-                        body.coupe=body.dum[,3],
-                        body.hback=body.dum[,4],
-                        body.hdtop=body.dum[,5],
-                        body.mcara=body.dum[,6],
-                        body.mibus=body.dum[,7],
-                        body.panvn=body.dum[,8],
-                        body.rdstr=body.dum[,9],
-                        body.sedan=body.dum[,10],
-                        body.stnwg=body.dum[,11],
-                        body.truck=body.dum[,12],
-                        body.ute=body.dum[,13],
-                        agecat2=agecat.dum[,2],
-                        agecat3=agecat.dum[,3],
-                        agecat4=agecat.dum[,4],
-                        agecat5=agecat.dum[,5],
-                        agecat6=agecat.dum[,6],
-                        gender=gen.dum[,1],
-                        area.B=area.dum[,2],
-                        area.C=area.dum[,3],
-                        area.D=area.dum[,4],
-                        area.E=area.dum[,5],
-                        area.F=area.dum[,6],
-                        veh_value=car.data.ctr$veh_value,
-                        exposure=car.data.ctr$exposure,
-                        veh_age=car.data.ctr$veh_age)
-```
-
-```{r}
-car.logit.model2 <- "model {
- beta.mu.0   <- 0
- beta.tau.0  <- 1/(log(15)^2)
- beta.mu <- 0
- beta.tau <- 1/(log(10)/2)^2
- # prior
- beta0   ~ dnorm(beta.mu.0,beta.tau.0)
- beta.veh_value  ~ dnorm(beta.mu,beta.tau)
- beta.exposure ~ dnorm(beta.mu,beta.tau)
- beta.veh_age    ~ dnorm(beta.mu,beta.tau)
- 
- beta.gender.m ~ dnorm(beta.mu,beta.tau)
- 
- beta.body.convt ~ dnorm(beta.mu,beta.tau)
- beta.body.coupe ~ dnorm(beta.mu,beta.tau)
- beta.body.hback ~ dnorm(beta.mu,beta.tau)
- beta.body.hdtop ~ dnorm(beta.mu,beta.tau)
- beta.body.mcara ~ dnorm(beta.mu,beta.tau)
- beta.body.mibus ~ dnorm(beta.mu,beta.tau)
- beta.body.panvn ~ dnorm(beta.mu,beta.tau)
- beta.body.rdstr ~ dnorm(beta.mu,beta.tau)
- beta.body.sedan ~ dnorm(beta.mu,beta.tau)
- beta.body.stnwg ~ dnorm(beta.mu,beta.tau)
- beta.body.truck ~ dnorm(beta.mu,beta.tau)
- beta.body.ute ~ dnorm(beta.mu,beta.tau)
- 
- beta.area.B ~ dnorm(beta.mu,beta.tau)
- beta.area.C ~ dnorm(beta.mu,beta.tau)
- beta.area.D ~ dnorm(beta.mu,beta.tau)
- beta.area.E ~ dnorm(beta.mu,beta.tau)
- beta.area.F ~ dnorm(beta.mu,beta.tau)
- 
- beta.agecat.2 ~ dnorm(beta.mu,beta.tau)
- beta.agecat.3 ~ dnorm(beta.mu,beta.tau)
- beta.agecat.4 ~ dnorm(beta.mu,beta.tau)
- beta.agecat.5 ~ dnorm(beta.mu,beta.tau)
- beta.agecat.6 ~ dnorm(beta.mu,beta.tau)
- 
- #Likelihood
- for(i in 1:n) {
-   logit(mu[i])  <- beta0+beta.veh_value*veh_value[i] +
-               beta.exposure*exposure[i] +beta.veh_age*veh_age[i]
-               +beta.gender.m*gender[i]
-               +beta.body.convt*body.convt[i]
-               +beta.body.coupe *body.coupe[i]
-               +beta.body.hback *body.hback[i]
-               +beta.body.hdtop *body.hdtop[i]
-               +beta.body.mcara *body.mcara[i]
-               +beta.body.mibus *body.mibus[i]
-               +beta.body.panvn *body.panvn[i]
-               +beta.body.rdstr *body.rdstr[i]
-               +beta.body.sedan *body.sedan[i]
-               +beta.body.stnwg *body.stnwg[i]
-               +beta.body.truck *body.truck[i]
-               +beta.body.ute *body.ute[i]
-               +beta.area.B *area.B[i]
-               +beta.area.C *area.C[i]
-               +beta.area.D *area.D[i]
-               +beta.area.E *area.E[i]
-               +beta.area.F *area.F[i]
-               +beta.agecat.2 *agecat2[i]
-               +beta.agecat.3 *agecat3[i]
-               +beta.agecat.4 *agecat4[i]
-               +beta.agecat.5 *agecat5[i]
-               +beta.agecat.6 *agecat6[i]
-
-   clm[i] ~ dbern(mu[i])
-   clm.rep[i] ~ dbern(mu[i])
- } 
-}"
-```
-```{r}
-# Run JAGS to the completion of the "adaption" stage 
-results.car.logit2 <- jags.model(file=textConnection(car.logit.model2), 
-                                   data=car.logit.data2,
-                                   n.chains=3)
-
-# Burn-in of 10000 iterations
-update(results.car.logit2, n.iter=10000)
-
-# Longer run for making inferences, assuming chains have converged
-results.car.logit2 <- coda.samples(results.car.logit2,
-                                  variable.names=c("clm.rep","beta0",
-                                                   "beta.veh_value",
-                                                   "beta.exposure" ,"beta.veh_age",
-                                                   "beta.gender.m",
-                                                   "beta.body.convt",
-                                                   "beta.body.coupe",
-                                                   "beta.body.hback"  ,
-                                                   "beta.body.hdtop" ,
-                                                   "beta.body.mcara" ,
-                                                   "beta.body.mibus",
-                                                   "beta.body.panvn",
-                                                   "beta.body.rdstr"  ,
-                                                   "beta.body.sedan"  ,
-                                                   "beta.body.stnwg"  ,
-                                                   "beta.body.truck",
-                                                   "beta.body.ute"  ,
-                                                   "beta.area.B"  ,
-                                                   "beta.area.C" ,
-                                                   "beta.area.D" ,
-                                                   "beta.area.E" ,
-                                                   "beta.area.F"  ,
-                                                   "beta.agecat.2",
-                                                   "beta.agecat.3",
-                                                   "beta.agecat.4"  ,
-                                                   "beta.agecat.5"  ,
-                                                   "beta.agecat.6"),
-                                  n.iter=3000)
-
-# Summary 
-
-```
-Model string
-```{r}
-car.logit.model <- "model {
- beta.mu.0   <- 0
- beta.tau.0  <- 1/(log(15)^2)
- beta.mu <- 0
- beta.tau <- 1/(log(5)/2)^2
- # prior
- beta0       ~ dnorm(beta.mu.0,beta.tau.0)
- beta.veh_value   ~ dnorm(beta.mu,beta.tau)
- beta.exposure ~ dnorm(beta.mu,beta.tau)
- beta.veh_age    ~ dnorm(beta.mu,beta.tau)
- beta.gender ~ dnorm(beta.mu,beta.tau)
- for (i in 1:length(body[1,])){
-     beta.body[i] ~ dnorm(beta.mu,beta.tau)
- }
- for (i in 1:length(agecat[1,])){
-     beta.agecat[i] ~ dnorm(beta.mu,beta.tau)
- }
- for (i in 1:length(area[1,])){
-     beta.area[i] ~ dnorm(beta.mu,beta.tau)
- }
- 
- #Likelihood
- for(i in 1:n) {
-   logit(mu[i])  <- beta0+beta.veh_value*veh_value[i] +
-               beta.exposure*exposure[i] + beta.veh_age*veh_age[i] +
-               beta.gender*gender[i] +
-               sum(beta.body%*%body[i,]) +
-               sum(beta.agecat%*%agecat[i,]) +
-               sum(beta.area%*%area[i,])
-
-   clm[i] ~ dbern(mu[i])
- } 
-}"
-```
-
-```{r}
-# Run JAGS to the completion of the "adaption" stage 
-results.car.logit <- jags.model(file=textConnection(car.logit.model), 
-                                   data=car.logit.data,
-                                   n.chains=3)
-
-# Burn-in of 10000 iterations
-update(results.car.logit, n.iter=1000)
-
-# Longer run for making inferences, assuming chains have converged
-results.car.logit <- coda.samples(results.car.logit,
-                                  variable.names=c("beta0","beta.veh_value",
-                                                   "beta.exposure","beta.veh_age",
-                                                   "beta.gender","beta.body",
-                                                   "beta.agecat","beta.area"), 
-                                  n.iter=1000)
-
-# Summary 
-summary(results.car.logit)
-```
-
-```{r}
-
-#Interpretation of parameter values
-#Joining all the chains in one data.frame
-results.car.logit.output <- 
-do.call(rbind.data.frame, results.car.logit)
-#interpretation
-cat("E[beta_LightMed] is",
-mean(results.car.logit.output$`beta.agecat[1]`,3),"\n")
-
-cat("E[beta_LightMed] is",
-mean(results.car.logit.output$`beta.agecat[2]`,3),"\n")
-
-cat("E[beta_LightMed] is",
-mean(results.car.logit.output$`beta.agecat[3]`,3))
-
-#... similarly for the other colours
-```
-```{r}
-#interpretation
-ilogit=function(x){ 1/(1+exp(-x))} #Inverse logistic function
-cat("E[ilogit(beta0)] is",round(mean(ilogit(results.car.logit.output$beta0)),3),"\n")
-
-```
-
-```{r}
-cat("E[ilogit(beta0+beta1)]/E[ilogit(beta0)] is",
-round(mean(ilogit(results.beetles.output$beta0
-                  +results.beetles.output$beta1))/
-mean(ilogit(results.beetles.output$beta0)),3),"\n")
-```
-
-
-
 ### Multiple regression in INLA
 The logistic regression model using the required covariates was implemented in INLA. In previous part, we have standerdise the non-categorical covariates so that the mean is 1 and standered deviation is $1$ for each non-categorical covariate. For categorical covariates, INLA will automatically create $k-1$ indicators, where $k$ is the number of catogories for certain covariate. The link function is chosen to be the logit function in our model.
 
@@ -469,14 +219,18 @@ summary(results.car.logit)
 
 As we created the reference group to be veh_body=BUS, gender=F, area=1,agecat=1, veh_age=1, the intercept $\beta_0$ reflects the scaled log odds ratio of this reference group. We can compute the mean of $p$ of the reference group, which is `r ilogit(-1.351)`. Hence, for the reference group, the probability of a claim is around $0.2$. For categorical covariate veh_body, the regression coefficient for each group is negative, indicating that all other vehicle categories have the probability of a claim lower than the BUS, and thus BUS is the one that most probable to have a claim. In addition, we see the regression coefficient for motorized caravan is the smallest among all the groups, which indicates that when other factors remain the same, motorized caravan is most likely to have a claim (apart from BUS). Similarly, we found the convertible vehicle is the least likely to have a claim, as the regression coefficient is the smallest among all the vehicle categories. For the covariate veh_age, we observe a increase trend in the regression coefficients. Therefore, we may believe that as the vehicle get older, the probability of a claim decreases. For the covariate gender, the regression coefficient is $-0.019$ for female. After taking the exponential, we can say the female have roughly $0.02$ less chance to claim than male. For covariate area, the regression coefficients for area B and F are positive, showing higher probabilities of a claim compared with the area A. The regression coefficients for area D and E are negative, showing lower probabilities of a claim compared with the area A. For the covariate agecat, we see the younger groups of people seem to have a larger probability to claim. 
 
-For the non-categorical variable, we need to transfer the coefficients back to the original scale to better interpret the data. The transformed values are shown below. For the vehicle value, we expect $1.82$ times increase of the log odds ratio in every unit increase on the veh_value. Similarly, we expect $0.63$ times increase of the log odds ratio in every unit increase on the exposure. 
+For the non-categorical variable, we need to transfer the coefficients back to the original scale to better interpret the data. The transformed values are shown below. The odds ratios of the predictors can be calculated by exponentiating the estimated coefficients. For the vehicle value, we expect $4.57\%$ increase in the odds ratio of having a claim for every unit increase in the veh_value. Similarly, we expect $16.92\%$ increase in the odds ratio of having a claim for one unit increase in exposure, assuming all other predictors are fixed.
 
 ```{r}
 cat("Regression coefficient for veh_value after transformation to the original scale: \n")
-results.car.logit$summary.fixed$mean[2] * sd(dataCar$veh_value)+mean(dataCar$veh_value)
+results.car.logit$summary.fixed$mean[2] * sd(dataCar$veh_value)
+cat("Take the exponential to get the odds ratio: \n")
+exp(results.car.logit$summary.fixed$mean[2] * sd(dataCar$veh_value))
 
 cat("Regression coefficient for exposure after transformation to the original scale: \n")
-results.car.logit$summary.fixed$mean[3] * sd(dataCar$exposure)+mean(dataCar$exposure)
+results.car.logit$summary.fixed$mean[3] * sd(dataCar$exposure)
+cat("Take the exponential to get the odds ratio: \n")
+exp(results.car.logit$summary.fixed$mean[3] * sd(dataCar$exposure))
 ```
 
 Now, we can compute the posterior mean of the model parameter ($p$) in Bernoulli distribution across different groups.
@@ -506,7 +260,7 @@ res.A %>%
   summarise(p.mu=mean(prob))
 ```
 
-The younger groups of people tends to have a higher probability to claim
+The younger groups of people tends to have a higher probability to claim.
 ```{r}
 res.A %>% 
   group_by(agecat) %>%
@@ -519,43 +273,6 @@ res.A %>%
   group_by(area) %>%
   summarise(p.mu=mean(prob))
 ```
-
-```{r}
-n <- nrow(car.data)
-body.dum <- dummy(car.data.scl$veh_body)
-agecat.dum <- dummy(car.data.scl$agecat)
-gen.dum <- dummy(car.data.scl$gender)
-area.dum <- dummy(car.data.scl$area)
-newdata <- 
-fittedvaluesm <- param.means[1]+param.means[2]*car.inla.data
-```
-
-
-
-```{r}
-
-#Create new rows in the dataset for these widths,
-#for all 4 colours, with the response Satellites set to NA
-newdata <- car.inla.data %>%
-  mutate(clm=rep(NA,len=nrow(car.inla.data)))
-#Join the new rows with the original dataframe,
-#and include the centered width covariate
-newdata=rbind(newdata,car.inla.data)
-
-#whenever we use a model with link function that is not the identity
-#and we want to compute the posterior marginal and mean of mu_i
-#and not eta_i,we need to set link=1 in control.predictor
-m3.I <- inla(formula = clm ~ veh_value+exposure+veh_body+
-               veh_age+gender+area+agecat, family="binomial",Ntrials=1,
-             control.family=list(link="logit"),
-data=newdata, control.fixed=prior.beta,
-control.predictor = list(compute = TRUE,link=1),
-control.compute=list(config=TRUE))
-
-```
-
-
-
 
 
 **b)[10 marks] Fit a Bayesian Poisson regression model on numclaims as
@@ -578,12 +295,6 @@ results.**
 
 We adopt a similar strategy for choosing priors as in part (a). However, here we look at the probability of each group instead of the odds ratio.
 ```{r}
-# dataset
-car.inla2.data <- car.data.scl %>% 
-  filter(clm==1)%>%
-  select(veh_value, exposure,veh_body, 
-         veh_age, gender, area, agecat, numclaims)
-
 mu.body <- c()
 for (i in 1:13){
   body <- unique(car.inla.data$veh_body)[i]
@@ -666,18 +377,18 @@ summary(results.car.log)
 For interpreting the coefficients we can exponentiate them. for the intercept, $e^{-2.451}=0.086$ represents the average number of claims of the reference category (i.e. the group with veh_body=BUS , veh_age=1, gender=M, area=A and agecat=1). The exponential function applied to the coefficients of the categorical factors provides the relative rate of the number of claims for different categories. For example, looking at the group veh_body=CONVT, $e^{-0.131}=0.877$, thus there is a $12.3\%$ decrease in the average rate of claims for convertible vehicle compared to the buses. The same interpretation can be extended to the other categorical covariates.
 
 
-For the non-categorical variable, we need to transfer the coefficients back to the original scale to better interpret the data. The transformed values are shown below. For the vehicle value, we expect $6.12$ times increase of the expected number of claims in every unit increase on the veh_value. Similarly, we expect $1.86$ times increase of the expected number of claims in every unit increase on the exposure. 
+For the non-categorical variable, we need to transfer the coefficients back to the original scale to better interpret the data. The transformed values are shown below. For the vehicle value, we expect $3.59\%$ increase of the expected number of claims for every unit increase in the veh_value. Similarly, we expect $16.22\%$ increase of the expected number of claims for every unit increase in the exposure. 
 
 ```{r}
 cat("Regression coefficient for veh_value after transformation to the original scale: \n")
-results.car.log$summary.fixed$mean[2] * sd(dataCar$veh_value)+mean(dataCar$veh_value)
+results.car.log$summary.fixed$mean[2] * sd(dataCar$veh_value)
 cat("Take the exponential:\n")
-exp(results.car.log$summary.fixed$mean[2] * sd(dataCar$veh_value)+mean(dataCar$veh_value))
+exp(results.car.log$summary.fixed$mean[2] * sd(dataCar$veh_value))
 
 cat("Regression coefficient for exposure after transformation to the original scale: \n")
-results.car.log$summary.fixed$mean[3] * sd(dataCar$exposure)+mean(dataCar$exposure)
+results.car.log$summary.fixed$mean[3] * sd(dataCar$exposure)
 cat("Take the exponential:\n")
-exp(results.car.log$summary.fixed$mean[3] * sd(dataCar$exposure)+mean(dataCar$exposure))
+exp(results.car.log$summary.fixed$mean[3] * sd(dataCar$exposure))
 ```
 
 Now, we can compute the posterior mean of the model parameter ($\mu$) in Poisson distribution across different groups.
@@ -763,6 +474,45 @@ results.car.poi <- inla(formula = numclaims ~ veh_value+exposure+veh_body+
              control.compute=list(config=TRUE))
 summary(results.car.poi)
 ```
+
+From the results, we can see the probability of having no claims is $0.297$, with a $95\%$ credible interval $(0.219,0.299)$.
+
+```{r}
+fittedvaluesm.C <- results.car.poi$summary.fitted.values$mean
+res.C <- car.data.scl %>% mutate(numclaims.mu = exp(fittedvaluesm.C))
+```
+
+```{r}
+res.C %>% 
+  group_by(veh_body) %>%
+  summarise(mean_num_claims=mean(numclaims.mu))
+```
+
+```{r}
+res.C %>% 
+  group_by(gender) %>%
+  summarise(mean_num_claims=mean(numclaims.mu))
+```
+
+```{r}
+res.C %>% 
+  group_by(area) %>%
+  summarise(mean_num_claims=mean(numclaims.mu))
+```
+
+```{r}
+res.C %>% 
+  group_by(agecat) %>%
+  summarise(mean_num_claims=mean(numclaims.mu))
+```
+
+```{r}
+res.C %>% 
+  group_by(veh_age) %>%
+  summarise(mean_num_claims=mean(numclaims.mu))
+```
+
+
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
 for insufficient explanation):
