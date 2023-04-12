@@ -39,8 +39,6 @@ require(dummies)
 require(INLA)
 data(dataCar)
 
-#You may need to set the working directory first before loading the dataset
-#setwd("location of Assignment 1")
 #The first 6 rows of the dataframe
 print.data.frame(dataCar[1:6,])
 
@@ -470,7 +468,7 @@ results.car.poi <- inla(formula = numclaims ~ veh_value+exposure+veh_body+
                veh_age+gender+area+agecat, family="zeroinflatedpoisson1",
              control.family=list(link="log"),
              data=car.inla.data, control.fixed=prior.beta.poi,
-             control.predictor = list(compute = TRUE,link=1),
+             control.predictor = list(compute = TRUE),
              control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
 summary(results.car.poi)
 ```
@@ -567,7 +565,7 @@ models.**
 **Discuss the results.**
 
 ```{r}
-nbsamp <- 1000
+nbsamp <- 100
 n <- nrow(car.inla.data)
 yrep.b <- matrix(0,nrow=n,ncol=nbsamp)
 yrep.c <- matrix(0,nrow=n,ncol=nbsamp)
@@ -595,6 +593,53 @@ yrep.c[row.num,]<- rpois(n=nbsamp,
 ```{r}
 rmse(car.inla.data$numclaims,rowMeans(yrep.b))
 rmse(car.inla.data$numclaims,rowMeans(yrep.c))
+```
+```{r}
+car.post.pred.test <- function(replicates,car.inla.data){
+  ind.clm0 <- which(car.inla.data$numclaims==0)
+  clm0 <- replicates[ind.clm0,]
+  
+  ind.clm1 <- which(car.inla.data$numclaims==1)
+  clm1 <- rowMeans(replicates[ind.clm1,])
+  
+  ind.clm2 <- which(car.inla.data$numclaims==2)
+  clm2 <- rowMeans(replicates[ind.clm2,])
+  
+  ind.clm3 <- which(car.inla.data$numclaims==3)
+  clm3 <- rowMeans(replicates[ind.clm3,])
+  
+  ind.clm4 <- which(car.inla.data$numclaims==4)
+  clm4 <- rowMeans(replicates[ind.clm4,])
+
+  par(mfrow=c(2,3))
+  par(mar=c(2,2,2,2))
+  xmin=min(c(clm0,0))-2
+  xmax=max(c(clm0,0))+2
+  hist(clm0,col="gray40",main="0 claim",xlim=c(xmin,xmax))
+  abline(v=0,col="red",lwd=2)
+  
+  xmin=min(c(clm1,1))-2
+  xmax=max(c(clm1,1))+2
+  hist(clm1,col="gray40",main="1 claim",xlim=c(xmin,xmax))
+  abline(v=1,col="red",lwd=2)
+  
+  xmin=min(c(clm2,2))-2
+  xmax=max(c(clm2,2))+2
+  hist(clm2,col="gray40",main="2 claims",xlim=c(xmin,xmax))
+  abline(v=2,col="red",lwd=2)
+  
+  xmin=min(c(clm3,3))-2
+  xmax=max(c(clm3,3))+2
+  hist(clm3,col="gray40",main="3 claims",xlim=c(xmin,xmax))
+  abline(v=3,col="red",lwd=2)
+  
+  xmin=min(c(clm4,4))-2
+  xmax=max(c(clm4,4))+2
+  hist(clm4,col="gray40",main="4 claims",xlim=c(xmin,xmax))
+  abline(v=4,col="red",lwd=2)
+}
+
+
 ```
 
 
