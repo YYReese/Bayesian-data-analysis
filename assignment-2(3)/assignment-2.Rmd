@@ -612,6 +612,8 @@ for (row.num in 1:n){
 }
 ```
 
+
+The root mean squared errors for the three models are computed as follows, where we can see all the three models have similar performances in terms of RMSE. Note also that the Poisson regression model in (b) gives slightly lower RMSE score.
 ```{r}
 rmse(car.inla.data$numclaims,rowMeans(yrep.b))
 rmse(car.inla.data$numclaims,rowMeans(yrep.c))
@@ -666,7 +668,7 @@ car.post.pred.test <- function(replicates,car.inla.data){
 
 ```
 
-
+We have performed the posterior predictive checks for all three models using the required test functions. Observe that the number of rows where the true number of claims are not zero is very small, from which we can infer the model may not fit well with the cases where number of claims is greater than 0. Although from RMSE results we may conclude the Poisson regression model in (b) would have a better overall performance, we see zero-inflated Poisson models are actually better at predicting higher number of claims, as shown below. Generally, all models seem to predict lots of zeros, which is because the dataset contains much less entries with number of claims greater than zero.
 ```{r}
 car.post.pred.test(yrep.b,car.inla.data)
 car.post.pred.test(yrep.c,car.inla.data)
