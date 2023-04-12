@@ -36,6 +36,8 @@ require(insuranceData)
 require(dplyr)
 require(knitr)
 require(dummies)
+require(Metrics)
+require(distributions3)
 require(INLA)
 data(dataCar)
 
@@ -529,6 +531,10 @@ prior on the linear predictor and the response.]**
 **Compute the posterior means of the model parameters, and discuss the
 results.**
 
+We have fit a new model on numclaims in terms of the same covariates to improve on the models in part c) by considering interactions between the veh_value and exposure, as well as random effects across areas. This is because we think there might be interactions between the vehicle value and the exposure, and there might be different random effects across different area. The priors and link function used here are the same as those in part c). For the rationale, see previous explanations.
+
+The results are shown below, where we can see the DIC decrease slightly compared with the previous model in part(c). The posterior means of model parameters can be found in the first column, and we can see them quite similar to those given by part(c). 
+
 ```{r}
 #Priors for the regression coefficients.
 prior.beta.poi <- list(mean.intercept = 0, prec.intercept =  1,
@@ -549,10 +555,6 @@ summary(results.car.poi.rd)
 
 
 
-
-Explanation (min 300 characters in your own words, otherwise -5 marks
-for insufficient explanation):
-
 **e)[10 marks] Perform posterior predictive model checks for your models
 b, c, d (i.e. using replicates).**
 
@@ -564,35 +566,50 @@ models.**
 
 **Discuss the results.**
 
+We sampled the posterior values of the linear predictor of the three models, and then used the exponentiated values to generate posterior predictive replicates.  the posterior replicates in the Stan model code in the generated quantities block. We try
+3 test functions: the median, skewness, and the mean square difference, which we define as the mean of
+((y_obs[i]-y_obs[i+1])ˆ2) from i = 1 to n_obs-1 (n_obs is the number of days where we observed the
+exchange rate). This mean square function is related to the volatility of the exchange rate, so it is a relevant
+quantity to test our model on.
+
 ```{r}
-nbsamp <- 100
+nbsamp <- 1000
 n <- nrow(car.inla.data)
 yrep.b <- matrix(0,nrow=n,ncol=nbsamp)
 yrep.c <- matrix(0,nrow=n,ncol=nbsamp)
-#yrep.d <- matrix(0,nrow=n,ncol=nbsamp)
+yrep.d <- matrix(0,nrow=n,ncol=nbsamp)
 
 car.b.samples=inla.posterior.sample(n=nbsamp, result=results.car.log)
 car.c.samples=inla.posterior.sample(n=nbsamp, result=results.car.poi)
-#car.d.samples=inla.posterior.sample(n=nbsamp, result=results.car.poi.rd)
+car.d.samples=inla.posterior.sample(n=nbsamp, result=results.car.poi.rd)
 
 predictor.b.samples=inla.posterior.sample.eval(function(...) {Predictor},
 car.b.samples)
 predictor.c.samples=inla.posterior.sample.eval(function(...) {Predictor},
 car.c.samples)
-#predictor.d.samples=inla.posterior.sample.eval(function(...) {Predictor},
-#car.d.samples)
+predictor.c.samples=inla.posterior.sample.eval(function(...) {},
+car.c.samples)
+predictor.d.samples=inla.posterior.sample.eval(function(...) {Predictor},
+car.d.samples)
 
 for (row.num in 1:n){   
-yrep.b[row.num,]<- rpois(n=nbsamp,
+  yrep.b[row.num,]<- rpois(n=nbsamp,
                          lambda=exp(predictor.b.samples[row.num,]))
-yrep.c[row.num,]<- rpois(n=nbsamp,
-                         lambda=exp(predictor.c.samples[row.num,]))    
+  
+  yrep.c[row.num,]<- rzipois(n=nbsamp,
+                             lambda=exp(predictor.c.samples[row.num,]),
+                             pi=car.c.samples[[1000]]$hyperpar)  
+
+  yrep.d[row.num,]<- rpois(n=nbsamp,
+                         lambda=exp(predictor.d.samples[row.num,]))  
+
 }
 ```
 
 ```{r}
 rmse(car.inla.data$numclaims,rowMeans(yrep.b))
 rmse(car.inla.data$numclaims,rowMeans(yrep.c))
+rmse(car.inla.data$numclaims,rowMeans(yrep.d))
 ```
 ```{r}
 car.post.pred.test <- function(replicates,car.inla.data){
