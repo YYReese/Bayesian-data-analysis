@@ -587,10 +587,15 @@ predictor.b.samples=inla.posterior.sample.eval(function(...) {Predictor},
 car.b.samples)
 predictor.c.samples=inla.posterior.sample.eval(function(...) {Predictor},
 car.c.samples)
-predictor.c.samples=inla.posterior.sample.eval(function(...) {},
-car.c.samples)
 predictor.d.samples=inla.posterior.sample.eval(function(...) {Predictor},
 car.d.samples)
+
+p0.c <- c()
+p0.d <- c()
+for ( i in 1:nbsamp){
+  p0.c[i] <- car.c.samples[[i]]$hyperpar
+  p0.d[i] <- car.d.samples[[i]]$hyperpar[1]
+}
 
 for (row.num in 1:n){   
   yrep.b[row.num,]<- rpois(n=nbsamp,
@@ -598,10 +603,11 @@ for (row.num in 1:n){
   
   yrep.c[row.num,]<- rzipois(n=nbsamp,
                              lambda=exp(predictor.c.samples[row.num,]),
-                             pi=car.c.samples[[1000]]$hyperpar)  
+                             pi=p0.c)  
 
-  yrep.d[row.num,]<- rpois(n=nbsamp,
-                         lambda=exp(predictor.d.samples[row.num,]))  
+  yrep.d[row.num,]<- rzipois(n=nbsamp,
+                         lambda=exp(predictor.d.samples[row.num,]),
+                         pi=p0.d)  
 
 }
 ```
@@ -641,9 +647,9 @@ car.post.pred.test <- function(replicates,car.inla.data){
   hist(no.clm1,col="gray40",main="number of claim=1",xlim=c(xmin,xmax))
   abline(v=true.no.clm1,col="red",lwd=2)
   
-  xmin=min(c(true.no.clm2,no.clm2))-20
-  xmax=max(c(no.clm2,true.no.clm2))+20
-  hist(no.clm2,col="gray40",main="number of claim=2")
+  xmin=min(c(true.no.clm2,no.clm2))-2
+  xmax=max(c(no.clm2,true.no.clm2))+2
+  hist(no.clm2,col="gray40",main="number of claim=2",xlim=c(xmin,xmax))
   abline(v=true.no.clm2, col="red", lwd=2)
   
   xmin=min(c(no.clm3,true.no.clm3))-2
@@ -664,6 +670,7 @@ car.post.pred.test <- function(replicates,car.inla.data){
 ```{r}
 car.post.pred.test(yrep.b,car.inla.data)
 car.post.pred.test(yrep.c,car.inla.data)
+car.post.pred.test(yrep.d,car.inla.data)
 ```
 
 
