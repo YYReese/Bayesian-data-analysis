@@ -533,8 +533,8 @@ results.**
 #Priors for the regression coefficients.
 prior.beta.poi <- list(mean.intercept = 0, prec.intercept =  1,
                        mean =0, prec = 25)
-#Fitting the model in INLA
 
+#Fitting the model in INLA
 results.car.poi.rd <- inla(formula = numclaims ~ veh_value*exposure+
                              veh_body+veh_age+gender+agecat+
                              f(area, model="iid"), 
