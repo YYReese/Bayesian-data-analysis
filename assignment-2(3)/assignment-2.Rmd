@@ -349,7 +349,7 @@ beta4 <- rnorm(1000,sd=0.2)
 beta5 <- rnorm(1000,sd=0.2)
 beta6 <- rnorm(1000,sd=0.2)
 beta7 <- rnorm(1000,sd=0.2)
-x <- exp( beta0+beta1+beta2+beta3+beta4+beta5+beta6+beta7)
+x <- exp( beta0+0.4*beta1+beta2+beta3+beta4+beta5+beta6+beta7)
 plot(density(x),main="density of the induced prior on the parameter mu in Poisson")
 plot(density(exp(beta0)),main="density of the induced prior on the parameter mu in Poisson")
 ```
@@ -596,47 +596,48 @@ rmse(car.inla.data$numclaims,rowMeans(yrep.c))
 ```
 ```{r}
 car.post.pred.test <- function(replicates,car.inla.data){
-  ind.clm0 <- which(car.inla.data$numclaims==0)
-  clm0 <- replicates[ind.clm0,]
+  no.clm0 <- colSums(replicates == 0)
+  true.no.clm0 <- sum(car.inla.data$numclaims==0)
   
-  ind.clm1 <- which(car.inla.data$numclaims==1)
-  clm1 <- rowMeans(replicates[ind.clm1,])
+  no.clm1 <- colSums(replicates == 1)
+  true.no.clm1 <- sum(car.inla.data$numclaims==1)
   
-  ind.clm2 <- which(car.inla.data$numclaims==2)
-  clm2 <- rowMeans(replicates[ind.clm2,])
+  no.clm2 <- colSums(replicates == 2)
+  true.no.clm2 <- sum(car.inla.data$numclaims==2)
   
-  ind.clm3 <- which(car.inla.data$numclaims==3)
-  clm3 <- rowMeans(replicates[ind.clm3,])
+  no.clm3 <- colSums(replicates == 3)
+  true.no.clm3 <- sum(car.inla.data$numclaims==3)
   
-  ind.clm4 <- which(car.inla.data$numclaims==4)
-  clm4 <- rowMeans(replicates[ind.clm4,])
+  no.clm4 <- colSums(replicates == 4)
+  true.no.clm4 <- sum(car.inla.data$numclaims==4)
 
   par(mfrow=c(2,3))
   par(mar=c(2,2,2,2))
-  xmin=min(c(clm0,0))-2
-  xmax=max(c(clm0,0))+2
-  hist(clm0,col="gray40",main="0 claim",xlim=c(xmin,xmax))
-  abline(v=0,col="red",lwd=2)
   
-  xmin=min(c(clm1,1))-2
-  xmax=max(c(clm1,1))+2
-  hist(clm1,col="gray40",main="1 claim",xlim=c(xmin,xmax))
-  abline(v=1,col="red",lwd=2)
+  xmin=min(c(no.clm0,true.no.clm0))-2
+  xmax=max(c(no.clm0,true.no.clm0))+2
+  hist(no.clm0,col="gray40",main="number of claim=0",xlim=c(xmin,xmax))
+  abline(v=true.no.clm0,col="red",lwd=2)
   
-  xmin=min(c(clm2,2))-2
-  xmax=max(c(clm2,2))+2
-  hist(clm2,col="gray40",main="2 claims",xlim=c(xmin,xmax))
-  abline(v=2,col="red",lwd=2)
+  xmin=min(c(no.clm1,true.no.clm1))-2
+  xmax=max(c(no.clm1,true.no.clm1))+2
+  hist(no.clm1,col="gray40",main="number of claim=1",xlim=c(xmin,xmax))
+  abline(v=true.no.clm1,col="red",lwd=2)
   
-  xmin=min(c(clm3,3))-2
-  xmax=max(c(clm3,3))+2
-  hist(clm3,col="gray40",main="3 claims",xlim=c(xmin,xmax))
-  abline(v=3,col="red",lwd=2)
+  xmin=min(c(true.no.clm2,no.clm2))-20
+  xmax=max(c(no.clm2,true.no.clm2))+20
+  hist(no.clm2,col="gray40",main="number of claim=2")
+  abline(v=true.no.clm2, col="red", lwd=2)
   
-  xmin=min(c(clm4,4))-2
-  xmax=max(c(clm4,4))+2
-  hist(clm4,col="gray40",main="4 claims",xlim=c(xmin,xmax))
-  abline(v=4,col="red",lwd=2)
+  xmin=min(c(no.clm3,true.no.clm3))-2
+  xmax=max(c(no.clm3,true.no.clm3))+2
+  hist(no.clm3,col="gray40",main="number of claim=3",xlim=c(xmin,xmax))
+  abline(v=true.no.clm3,col="red",lwd=2)
+  
+  xmin=min(c(no.clm4,true.no.clm4))-2
+  xmax=max(c(no.clm4,true.no.clm4))+2
+  hist(no.clm4,col="gray40",main="number of claim=4",xlim=c(xmin,xmax))
+  abline(v=true.no.clm4,col="red",lwd=2)
 }
 
 
@@ -644,9 +645,8 @@ car.post.pred.test <- function(replicates,car.inla.data){
 
 
 ```{r}
-
-barplot(table(yrep.b)/ncol(yrep.b),xlab="y",
-        ylab="Pr(y* |y )")
+car.post.pred.test(yrep.b,car.inla.data)
+car.post.pred.test(yrep.c,car.inla.data)
 ```
 
 
@@ -866,7 +866,6 @@ glm(sadness ~ gender+on_a_diet+
 #Priors for the regression coefficients.
 prior.beta.b <- list(mean.intercept = 0, prec.intercept =  1/10,
                        mean =0, prec = 1)
-
 
 
 #Fitting the model in INLA
