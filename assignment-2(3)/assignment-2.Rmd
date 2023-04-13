@@ -785,7 +785,7 @@ prior on the response.]**
 **Compute the posterior means of the model parameters, and interpret
 their meaning.**
 
-Data preprocessing.
+We first create the dataset for model fitting. Since there are missing values in some of the covariates, we remove them. The non-categorical variables are scaled. For stroop_test_performance, we first take the log and then scale them.
 ```{r}
 study.data.scl <- study %>% 
   select(gender, on_a_diet, alcohol, drugs, sick, other_factors, 
@@ -795,26 +795,50 @@ study.data.scl <- study %>%
   mutate(no2gps_24h=scale(no2gps_24h),maxwindspeed_24h=scale(maxwindspeed_24h),
          precip_24h=scale(precip_24h),sec_noise55_day=scale(sec_noise55_day),
          age_yrs=scale(age_yrs),tmean_24h=scale(tmean_24h),
-         log.stroop_test_performance=scale(log(stroop_test_performance)))
+         log.stroop_test_performance=log(stroop_test_performance)) %>%
+  mutate_all(~ifelse(. %in% c("N/A", "null", ""), NA, .)) %>% 
+  na.omit()
 
 ```
 
+In terms of prior choices, we would like to ensure that the linear predictor has a large probability of being in the interval $[3,5]$. A density plot of the scaled and transformed true responses are shown below.
+```{r}
+plot(density(study.data.scl$log.stroop_test_performance))
+```
+
+We set the intercept to have mean $4$ and standard deviation $1$. We use the same variance for each of the regression coefficients. First, we compute the sum of the covariate squares for each row in the dataset, and then use the $0.05$ quantile of this. Then we choose the variance of the regression coefficients as $\sigma_{\beta}^2=1/(0.05\text{quantile of sum of covariates squares})$.
+
+```{r}
+mm <- model.matrix(sadness ~ gender+on_a_diet+alcohol+
+                  drugs+sick+other_factors+education+smoke+
+                  no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                  access_greenbluespaces_300mbuff+age_yrs+tmean_24h,
+                data=study.data.scl)
+var.beta <- 1/quantile(rowSums(mm^2),0.05)
+cat("Variance of regression coefficients:",var.beta, "\n")
+```
+
+Now, we look at the induced prior on the linear predictor (as well as the exponential of linear predictor) in a spacial case (where all the covariates are $1$ for non-categorical ones). Our choice of priors looks acceptable. 
 ```{r}
 x <- matrix(nrow=1000,ncol=15)
-x[,1] <- rnorm(1000,sd=sqrt(10))
+x[,1] <- rnorm(1000,mean=4,sd=sqrt(1))
 for (i in 2:15){
-  x[,i] <- rnorm(1000,sd=sqrt(1))
+  x[,i] <- rnorm(1000,sd=sqrt(0.2))
 }
-plot(density((rowSums(x))))
+
+par(mfrow=c(1,2))
+plot(density((rowSums(x))),main="log scale")
+
+plot(density(exp(rowSums(x))),xlim=c(0,100),
+     main="original scale")
 
 ```
 
-
-
+We fit the model as required in INLA. The summary including the posterior mean of model parameters are shown below. 
 ```{r}
 #Priors for the regression coefficients.
-prior.beta.a <- list(mean.intercept = 0, prec.intercept =  0.1,
-                       mean =0, prec = 1)
+prior.beta.a <- list(mean.intercept = 4, prec.intercept =  1,
+                       mean =0, prec = 5)
 
 prec.prior <- list(prec=list(prior = "loggamma", param = c(0.1, 0.1)))
 #Fitting the model in INLA
@@ -831,11 +855,26 @@ results.study.a <- inla(formula = log.stroop_test_performance ~ gender+on_a_diet
 summary(results.study.a)
 ```
 
+The model fit indicates that the intercept has mean $3.705$. We can take the exponential to get the estimated mean value of the stroop test performance which is $40.65$.
+```{r}
+exp(3.705)
+```
+
+Therefore, the typical number of stroop test performance is close to $40.65$. It is worth noting that genderOtra and genderWoman have negative mean values, indicating that men tend to have higher test performance. The educationUniversity coefficient has mean $0.14$, indicating that there is a university-level education advantage of around $e^{0.14}=1.15$ scores. The coefficient for age_yrs is $-0.124$. We can transform to the original scale as follows. Hence, we expect $0.219$ unit increase of the expected test performance for one year increase in age. The same way of interpretation can be applied to all non-categorical variables.
+```{r}
+exp(-0.124*sd(study$age_yrs))
+```
 
 
+```{r}
+glm(log.stroop_test_performance ~ gender+on_a_diet+
+                          alcohol+drugs+sick+other_factors+education+smoke+
+                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h,
+    family=gaussian,data=study.data.scl)
 
-Explanation (min 300 characters in your own words, otherwise -5 marks
-for insufficient explanation):
+```
+
 
 **b)[10 marks] Fit a Bayesian Poisson GLM**
 
@@ -860,24 +899,50 @@ prior on the response.]**
 **Compute the posterior means of the model parameters, and interpret
 their meaning.**
 
+First we look at the density of the response variable, sadness, both in log scale and original scale.
 ```{r}
-mm=model.matrix(sadness~  gender+on_a_diet+
-                          alcohol+drugs+sick+other_factors+education+smoke+
-                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
-                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h,data=study.data.scl)
-var.beta=5/quantile(rowSums(mm^2),0.5)
-cat("Variance of regression coefficients:",var.beta, "\n")
-
+par(mfrow=c(1,2))
+plot(density(log(study.data.scl$sadness)), main="log scale")
+plot(density((study.data.scl$sadness)),main="original scale")
 ```
 
+The typical values of (scaled) sadness scores are in the interval $[0,15]$, so we would like to the induced prior on the sadness scores to have a large probability density in that interval. We tried to set the prior for intercept as $\mathcal{N}(0,10)$ and set the priors for each regression coefficients to be identically $\mathcal{N}(0,0.1)$. Then, we can plot the induced prior for the sadness scores in different covariate settings. After trying different values of covariates, we found our induced priors look alright. 
 ```{r}
 x <- matrix(nrow=1000,ncol=15)
-x[,1] <- rnorm(1000,mean=0,sd=sqrt(2))
+x[,1] <- rnorm(1000,mean=0,sd=sqrt(1))
+
+# For categorical covaraites, we randomly pick one category 
+# in each group. 
+# So, in total we have 15 coefficients (excluding the intercept)
 for (i in 2:15){
-  x[,i] <- rnorm(1000,mean=0,sd=sqrt(0.5 ))
+  x[,i] <- rnorm(1000,mean=0,sd=sqrt(0.2))
 }
-plot(density((rowSums(x))),xlim=c(-5,50))
-plot(density((x[,1])),xlim=c(-5,50))
+par(mfrow=c(1,3))
+plot(density(exp(rowSums(x))),xlim=c(0,50))
+
+# set some values for covariates
+b <- rep(1,15)
+b[9] <- as.numeric(quantile(study.data.scl$no2gps_24h,0.95))
+b[10] <- as.numeric(quantile(study.data.scl$maxwindspeed_24h,0.95))
+b[11] <- as.numeric(quantile(study.data.scl$precip_24h,0.95))
+b[12] <- as.numeric(quantile(study.data.scl$sec_noise55_day,0.95))
+b[14] <- as.numeric(quantile(study.data.scl$age_yrs,0.95))
+b[15] <- as.numeric(quantile(study.data.scl$tmean_24h,0.95))
+x <- x%*% b
+
+plot(density(exp(rowSums(x))),xlim=c(0,50))
+
+
+b <- rep(1,15)
+b[9] <- as.numeric(quantile(study.data.scl$no2gps_24h,0.05))
+b[10] <- as.numeric(quantile(study.data.scl$maxwindspeed_24h,0.05))
+b[11] <- as.numeric(quantile(study.data.scl$precip_24h,0.05))
+b[12] <- as.numeric(quantile(study.data.scl$sec_noise55_day,0.05))
+b[14] <- as.numeric(quantile(study.data.scl$age_yrs,0.05))
+b[15] <- as.numeric(quantile(study.data.scl$tmean_24h,0.05))
+x <- x%*% b
+
+plot(density(exp(rowSums(x))),xlim=c(0,50))
 ```
 ```{r}
 glm(sadness ~ gender+on_a_diet+
@@ -887,11 +952,16 @@ glm(sadness ~ gender+on_a_diet+
     family=poisson(link="log"),data=study.data.scl)
 ```
 
-
+We implement the model in INLA with the priors for the intercept and regression coefficients specified above. We also tried different Normal priors with mean zero slightly different precision hyperparameters, and the results are similar, showing our choice of prior is not sentitive.
 ```{r}
 #Priors for the regression coefficients.
-prior.beta.b <- list(mean.intercept = 0, prec.intercept =  1/10,
-                       mean =0, prec = 1)
+
+# Tryied differet priors and the results look similar,
+# indicating that our choice of prior is not sensitive 
+#prior.beta.b <- list(mean.intercept = 0, prec.intercept =  1,
+#                       mean =0, prec = 1)
+prior.beta.b <- list(mean.intercept = 0, prec.intercept =  1,
+                       mean =0, prec = 5)
 
 
 #Fitting the model in INLA
