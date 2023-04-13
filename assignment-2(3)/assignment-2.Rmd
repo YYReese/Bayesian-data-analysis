@@ -2,7 +2,9 @@
 editor_options:
   markdown:
     wrap: 72
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 **University of Edinburgh**
@@ -217,20 +219,20 @@ summary(results.car.logit)
 
 ```
 
-As we created the reference group to be veh_body=BUS, gender=F, area=1,agecat=1, veh_age=1, the intercept $\beta_0$ reflects the scaled log odds ratio of this reference group. We can compute the mean of $p$ of the reference group, which is `r ilogit(-1.351)`. Hence, for the reference group, the probability of a claim is around $0.2$. For categorical covariate veh_body, the regression coefficient for each group is negative, indicating that all other vehicle categories have the probability of a claim lower than the BUS, and thus BUS is the one that most probable to have a claim. In addition, we see the regression coefficient for motorized caravan is the smallest among all the groups, which indicates that when other factors remain the same, motorized caravan is most likely to have a claim (apart from BUS). Similarly, we found the convertible vehicle is the least likely to have a claim, as the regression coefficient is the smallest among all the vehicle categories. For the covariate veh_age, we observe a increase trend in the regression coefficients. Therefore, we may believe that as the vehicle get older, the probability of a claim decreases. For the covariate gender, the regression coefficient is $-0.019$ for female. After taking the exponential, we can say the female have roughly $0.02$ less chance to claim than male. For covariate area, the regression coefficients for area B and F are positive, showing higher probabilities of a claim compared with the area A. The regression coefficients for area D and E are negative, showing lower probabilities of a claim compared with the area A. For the covariate agecat, we see the younger groups of people seem to have a larger probability to claim. 
+As we created the reference group to be veh_body=BUS, gender=F, area=1,agecat=1, veh_age=1, the intercept $\beta_0$ reflects the scaled log odds ratio of this reference group. We can compute the mean of $p$ of the reference group, which is $\text{ilogit}(-1.351)=0.2057$. Hence, for the reference group, the probability of a claim is around $0.2$. For categorical covariate veh_body, the regression coefficient for each group is negative, indicating that all other vehicle categories have the probability of a claim lower than the BUS, and thus BUS is the one that most probable to have a claim. In addition, we see the regression coefficient for motorized caravan is the smallest among all the groups, which indicates that when other factors remain the same, motorized caravan is most likely to have a claim (apart from BUS). Similarly, we found the convertible vehicle is the least likely to have a claim, as the regression coefficient is the smallest among all the vehicle categories. For the covariate veh_age, we observe a increase trend in the regression coefficients. Therefore, we may believe that as the vehicle get older, the probability of a claim decreases. For the covariate gender, the regression coefficient is $-0.019$ for female. After taking the inverse logit, we can say the female have roughly $1-\text{ilogit}(-0.019)=50.47\%$ less chance to claim than male. For covariate area, the regression coefficients for area B and F are positive, showing higher probabilities of a claim compared with the area A. The regression coefficients for area D and E are negative, showing lower probabilities of a claim compared with the area A. For the covariate agecat, we see the younger groups of people seem to have a larger probability to claim. 
 
 For the non-categorical variable, we need to transfer the coefficients back to the original scale to better interpret the data. The transformed values are shown below. The odds ratios of the predictors can be calculated by exponentiating the estimated coefficients. For the vehicle value, we expect $4.57\%$ increase in the odds ratio of having a claim for every unit increase in the veh_value. Similarly, we expect $16.92\%$ increase in the odds ratio of having a claim for one unit increase in exposure, assuming all other predictors are fixed.
 
 ```{r}
-cat("Regression coefficient for veh_value after transformation to the original scale: \n")
-results.car.logit$summary.fixed$mean[2] * sd(dataCar$veh_value)
-cat("Take the exponential to get the odds ratio: \n")
-exp(results.car.logit$summary.fixed$mean[2] * sd(dataCar$veh_value))
+cat("Regression coefficient for veh_value after transformation to the original scale: \n",
+results.car.logit$summary.fixed$mean[2] * sd(dataCar$veh_value))
+cat("Take the exponential to get the odds ratio: \n",
+exp(results.car.logit$summary.fixed$mean[2] * sd(dataCar$veh_value)))
 
-cat("Regression coefficient for exposure after transformation to the original scale: \n")
-results.car.logit$summary.fixed$mean[3] * sd(dataCar$exposure)
-cat("Take the exponential to get the odds ratio: \n")
-exp(results.car.logit$summary.fixed$mean[3] * sd(dataCar$exposure))
+cat("Regression coefficient for exposure after transformation to the original scale: \n",
+results.car.logit$summary.fixed$mean[3] * sd(dataCar$exposure))
+cat("Take the exponential to get the odds ratio: \n",
+exp(results.car.logit$summary.fixed$mean[3] * sd(dataCar$exposure)))
 ```
 
 Now, we can compute the posterior mean of the model parameter ($p$) in Bernoulli distribution across different groups.
@@ -353,7 +355,6 @@ beta6 <- rnorm(1000,sd=0.2)
 beta7 <- rnorm(1000,sd=0.2)
 x <- exp( beta0+0.4*beta1+beta2+beta3+beta4+beta5+beta6+beta7)
 plot(density(x),main="density of the induced prior on the parameter mu in Poisson")
-plot(density(exp(beta0)),main="density of the induced prior on the parameter mu in Poisson")
 ```
 
 We fit the regression model in INLA using log as the link function. The results are summarised as follows.
@@ -374,21 +375,21 @@ results.car.log <- inla(formula = numclaims ~ veh_value+exposure+veh_body+
              control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
 summary(results.car.log)
 ```
-For interpreting the coefficients we can exponentiate them. for the intercept, $e^{-2.451}=0.086$ represents the average number of claims of the reference category (i.e. the group with veh_body=BUS , veh_age=1, gender=M, area=A and agecat=1). The exponential function applied to the coefficients of the categorical factors provides the relative rate of the number of claims for different categories. For example, looking at the group veh_body=CONVT, $e^{-0.131}=0.877$, thus there is a $12.3\%$ decrease in the average rate of claims for convertible vehicle compared to the buses. The same interpretation can be extended to the other categorical covariates.
+For interpreting the coefficients we can exponentiate them. For the intercept, $e^{-2.451}=0.086$ represents the average number of claims of the reference category (i.e. the group with veh_body=BUS , veh_age=1, gender=M, area=A and agecat=1). The exponential function applied to the coefficients of the categorical factors provides the relative rate of the number of claims for different categories. For example, looking at the group veh_body=CONVT, $e^{-0.131}=0.877$, thus there is a $12.3\%$ decrease in the average rate of claims for convertible vehicle compared to the buses. The same interpretation can be extended to the other categorical covariates.
 
 
 For the non-categorical variable, we need to transfer the coefficients back to the original scale to better interpret the data. The transformed values are shown below. For the vehicle value, we expect $3.59\%$ increase of the expected number of claims for every unit increase in the veh_value. Similarly, we expect $16.22\%$ increase of the expected number of claims for every unit increase in the exposure. 
 
 ```{r}
-cat("Regression coefficient for veh_value after transformation to the original scale: \n")
-results.car.log$summary.fixed$mean[2] * sd(dataCar$veh_value)
-cat("Take the exponential:\n")
-exp(results.car.log$summary.fixed$mean[2] * sd(dataCar$veh_value))
+cat("Regression coefficient for veh_value after transformation to the original scale: \n",
+results.car.log$summary.fixed$mean[2] * sd(dataCar$veh_value))
+cat("Take the exponential:\n",
+exp(results.car.log$summary.fixed$mean[2] * sd(dataCar$veh_value)))
 
-cat("Regression coefficient for exposure after transformation to the original scale: \n")
-results.car.log$summary.fixed$mean[3] * sd(dataCar$exposure)
-cat("Take the exponential:\n")
-exp(results.car.log$summary.fixed$mean[3] * sd(dataCar$exposure))
+cat("Regression coefficient for exposure after transformation to the original scale: \n",
+results.car.log$summary.fixed$mean[3] * sd(dataCar$exposure))
+cat("Take the exponential:\n",
+exp(results.car.log$summary.fixed$mean[3] * sd(dataCar$exposure)))
 ```
 
 Now, we can compute the posterior mean of the model parameter ($\mu$) in Poisson distribution across different groups.
@@ -788,7 +789,7 @@ their meaning.**
 We first create the dataset for model fitting. Since there are missing values in some of the covariates, we remove them. The non-categorical variables are scaled. For stroop_test_performance, we first take the log and then scale them.
 ```{r}
 study.data.scl <- study %>% 
-  select(gender, on_a_diet, alcohol, drugs, sick, other_factors, 
+  select(Person_ID,gender, on_a_diet, alcohol, drugs, sick, other_factors, 
          education, smoke,no2gps_24h, maxwindspeed_24h,precip_24h,
          sec_noise55_day,access_greenbluespaces_300mbuff,age_yrs,
          tmean_24h, stroop_test_performance, sadness) %>%
@@ -952,7 +953,7 @@ glm(sadness ~ gender+on_a_diet+
     family=poisson(link="log"),data=study.data.scl)
 ```
 
-We implement the model in INLA with the priors for the intercept and regression coefficients specified above. We also tried different Normal priors with mean zero slightly different precision hyperparameters, and the results are similar, showing our choice of prior is not sentitive.
+We implement the model in INLA with the priors for the intercept and regression coefficients specified above. We also tried different Normal priors with mean zero slightly different precision hyperparameters, and the results are similar, showing our choice of prior is not sensitive. The posterior means of the model parameters are shown in the summary below.
 ```{r}
 #Priors for the regression coefficients.
 
@@ -978,8 +979,7 @@ results.study.b <- inla(formula = sadness ~ gender+on_a_diet+
 summary(results.study.b)
 ```
 
-Explanation (min 300 characters in your own words, otherwise -5 marks
-for insufficient explanation):
+The intercept has mean $1.758$. Taking the exponential we get the estimated mean value of the sadness level, which is $5.80$. Note that the genderOtra has value $-0.430$, indicating that the non-binary people tend to be more likely to be sad. More specifically, the statistic shows there is a $1-e^{-0.43}=35\%$ decrease in the average rate of sadness level for convertible vehicle compared to the men, assuming other factors remain the same. 
 
 **c)[10 marks] Incorporate Person_ID as a random effects into the models
 a.) and b.).**
@@ -992,7 +992,45 @@ default priors).**
 **Discuss the changes that happened due to using random effects.**
 
 ```{r}
+#Priors for the regression coefficients.
+prior.beta.a <- list(mean.intercept = 4, prec.intercept =  1,
+                       mean =0, prec = 5)
 
+prec.prior <- list(prec=list(prior = "loggamma", param = c(0.1, 0.1)))
+#Fitting the model in INLA
+#"control.fixed=prior.beta" sets regression coeff. priors.
+results.study.c1 <- inla(formula = log.stroop_test_performance ~ gender+on_a_diet+
+                          alcohol+drugs+sick+other_factors+education+smoke+
+                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h+
+                           f(Person_ID, model="iid"),
+                        family="gaussian",
+                        control.family=list(hyper=prec.prior),
+                        data=study.data.scl, control.fixed=prior.beta.a,
+                        control.predictor = list(compute = TRUE),
+                        control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
+summary(results.study.c1)
+```
+
+
+```{r}
+prior.beta.c2 <- list(mean.intercept = 0, prec.intercept =  1,
+                       mean =0, prec = 5)
+
+
+#Fitting the model in INLA
+#"control.fixed=prior.beta" sets regression coeff. priors.
+results.study.c2 <- inla(formula = sadness ~ gender+on_a_diet+
+                          alcohol+drugs+sick+other_factors+education+smoke+
+                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h+
+                          f(Person_ID,model="iid" ),
+                        family="poisson",
+                        control.family=list(link="log"),
+                        data=study.data.scl, control.fixed=prior.beta.c2,
+                        control.predictor = list(compute = TRUE,link=1),
+                        control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
+summary(results.study.c2)
 ```
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
@@ -1009,8 +1047,80 @@ models (i.e. with, or without random effects).**
 **Discuss the results.**
 
 ```{r}
+nbsamp <- 1000
+n2 <- nrow(study.data.scl)
+yrep.sad.b <- matrix(0,nrow=n2,ncol=nbsamp)
+yrep.sad.c <- matrix(0,nrow=n2,ncol=nbsamp)
 
+sad.b.samples=inla.posterior.sample(n=nbsamp, result=results.study.b)
+sad.c.samples=inla.posterior.sample(n=nbsamp, result=results.study.c2)
+
+predictor.sad.b.samples=inla.posterior.sample.eval(function(...) {Predictor},
+sad.b.samples)
+predictor.sad.c.samples=inla.posterior.sample.eval(function(...) {Predictor},
+sad.c.samples)
+
+for (row.num in 1:n2){   
+  yrep.sad.b[row.num,]<- rpois(n=nbsamp,
+                         lambda=exp(predictor.sad.b.samples[row.num,]))
+  yrep.sad.c[row.num,]<- rpois(n=nbsamp,
+                         lambda=exp(predictor.sad.c.samples[row.num,]))
+
+}
 ```
+```{r}
+sad.post.pred.test <- function(replicates,study.data.scl){
+  par(mfrow=c(4,4))
+  par(mar=c(1.7,1.7,1.7,1.7))
+  for (i in 1:14){
+    ind.sad <- which(study.data.scl$sadness==i)
+    sad <- replicates[ind.sad,]
+    xmin=min(c(sad,i))-2
+    xmax=max(c(sad,i))+2
+    hist(sad,col="gray40",main=c("sadness=",i),xlim=c(xmin,xmax))
+    abline(v=i,col="red",lwd=2)
+  }
+}
+```
+
+```{r}
+sad.post.pred.test(yrep.sad.b,study.data.scl)
+sad.post.pred.test(yrep.sad.c,study.data.scl)
+```
+
+
+```{r}
+par(mfrow=c(4,4))
+par(mar=c(1.7,1.7,1.7,1.7))
+for (i in 1:14){
+  no.sad <- colSums(yrep.sad.b==i)
+  true.no.sad <- sum(study.data.scl$sadness==i)
+  xmin=min(c(no.sad,true.no.sad))-2
+  xmax=max(c(no.sad,true.no.sad))+2
+  hist(no.sad,col="gray40",main=c("sadness",i),xlim=c(xmin,xmax))
+  abline(v=true.no.sad,col="red",lwd=2)
+}
+```
+
+```{r}
+par(mfrow=c(4,4))
+par(mar=c(1.7,1.7,1.7,1.7))
+for (i in 1:14){
+  no.sad <- colSums(yrep.sad.c==i)
+  true.no.sad <- sum(study.data.scl$sadness==i)
+  xmin=min(c(no.sad,true.no.sad))-2
+  xmax=max(c(no.sad,true.no.sad))+2
+  hist(no.sad,col="gray40",main=c("sadness",i),xlim=c(xmin,xmax))
+  abline(v=true.no.sad,col="red",lwd=2)
+}
+```
+
+The root mean squared errors for the two models are computed below. We see a significant improvement of the model if we add random effects of ID to the model.
+```{r}
+rmse(study.data.scl$sadness,rowMeans(yrep.sad.b))
+rmse(study.data.scl$sadness,rowMeans(yrep.sad.c))
+```
+
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
 for insufficient explanation):
@@ -1034,9 +1144,100 @@ while for sadness, plot a histogram.**
 
 **Discuss the results.**
 
+We begin with adding these covariates as a new row to the dataset, and then set the response variable as NA.
 ```{r}
+study.data.new  <- 
+  data.frame(Person_ID=286, 
+             gender="Woman", on_a_diet="Yes", alcohol="No",
+             drugs="No", sick="No",other_factors="No",
+             education="University",smoke="Yes", 
+             no2gps_24h=(80-mean(study$no2gps_24h))/sd(study$no2gps_24h),
+             maxwindspeed_24h=(10-mean(study$maxwindspeed_24h))/sd(study$maxwindspeed_24h),
+             precip_24h=(50-mean(study$precip_24h))/sd(study$precip_24h),
+             sec_noise55_day=(10000-mean(study$sec_noise55_day))/sd(study$sec_noise55_day),
+             access_greenbluespaces_300mbuff="Yes",
+             age_yrs=(40-mean(study$age_yrs))/sd(study$age_yrs), 
+             tmean_24h=(25-mean(study$tmean_24h))/sd(study$tmean_24h),
+             sadness=NA,stroop_test_performance=NA,
+             log.stroop_test_performance=NA) %>%
+  rbind(study.data.scl)
 
 ```
+
+The second step is to fit the model using the new dataset.
+```{r}
+results.study.a <- inla(formula = log.stroop_test_performance ~ gender+on_a_diet+
+                          alcohol+drugs+sick+other_factors+education+smoke+
+                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h,
+                        family="gaussian",
+                        control.family=list(hyper=prec.prior),
+                        data=study.data.new, control.fixed=prior.beta.a,
+                        control.predictor = list(compute = TRUE),
+                        control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
+summary(results.study.a)
+```
+After this, we obtain posterior samples for the Predictor variable for this new data point  (located in the first row). The Predictor variables in the sample correspond to the linear predictor ηi in the LGM model. They are not samples from the posterior predictive.
+
+```{r}
+nsamp <- 10000
+log.stroop.samples <- inla.posterior.sample(n=nsamp,
+                                        result=results.study.a,
+                                        selection = list(Predictor=1))
+   #selection = list(Predictor=1) means that we only want
+   #the samples for the linear predictor eta_i of the new datapoint
+ls.predictor.samples <- unlist(lapply(log.stroop.samples, function(x)(x$latent[1])))
+
+ls.sigma.samples <- 1/sqrt(unlist(lapply(log.stroop.samples, 
+                                      function(x)(x$hyperpar[1])))) 
+ls.post.pred.samples <- ls.predictor.samples +
+  rnorm(n=nsamp,mean=0,sd=ls.sigma.samples)
+
+plot(density(exp(ls.post.pred.samples)),
+     xlab="x",ylab="Density", 
+     main="Posterior predictive for stroop test of the new datapoint")
+cat("The posterior predictive mean for stroop test performance is ",
+    mean(exp(ls.post.pred.samples)),"\n",
+    "The posterior predictive standard deviation for stroop test performance is ",
+    sd(exp(ls.post.pred.samples)))
+```
+
+```{r}
+#Fitting the model in INLA
+#"control.fixed=prior.beta" sets regression coeff. priors.
+results.study.c2 <- inla(formula = sadness ~ gender+on_a_diet+
+                          alcohol+drugs+sick+other_factors+education+smoke+
+                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h+
+                          f(Person_ID,model="iid" ),
+                        family="poisson",
+                        control.family=list(link="log"),
+                        data=study.data.new, control.fixed=prior.beta.c2,
+                        control.predictor = list(compute = TRUE,link=1),
+                        control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
+summary(results.study.c2)
+```
+
+```{r}
+nsamp <- 10000
+sad.c2.samples <- inla.posterior.sample(n=nsamp,
+                                        result=results.study.c2,
+                                        selection = list(Predictor=1))
+   #selection = list(Predictor=1) means that we only want
+   #the samples for the linear predictor eta_i of the new datapoint
+sad.predictor.samples <- unlist(lapply(sad.c2.samples, function(x)(x$latent[1])))
+sad.post.pred.samples <- rpois(n=nsamp, lambda=sad.predictor.samples)
+
+barplot(table(sad.post.pred.samples)/length(sad.post.pred.samples),
+        xlab="x",ylab="Density", 
+     main="Posterior predictive for sadness scores of the new datapoint")
+
+cat("The posterior predictive mean for stroop test performance is ",
+    mean(sad.post.pred.samples),"\n",
+    "The posterior predictive standard deviation for stroop test performance is ",
+    sd(sad.post.pred.samples))
+```
+
 
 Explanation (min 300 characters in your own words, otherwise -5 marks
 for insufficient explanation):
