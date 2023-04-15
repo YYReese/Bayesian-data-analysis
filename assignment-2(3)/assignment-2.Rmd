@@ -991,7 +991,19 @@ default priors).**
 
 **Discuss the changes that happened due to using random effects.**
 
+In this part, we incorporate Person_ID as a random effects into the two models in (a) and (b) respectively. We choose to adopt the penalized complexity priors for both the models. To calibrate the scaling of the random effects prior, we set $U$ and $p$ so that $P(\sigma u>U) =p$. We set $p=0.01$ and fix $U=10\sigma_y$, as we believe the probability that the standard deviation of the random effect is $10$ times that of the response is quite small. 
+
 ```{r}
+# sd of the log stroop test performance
+sdres.a <- sd(study.data.scl$log.stroop_test_performance)
+# sd of the sadness scores
+sdres.b <- sd(study.data.scl$sadness)
+```
+
+The posterior summary of the model parameters are shown as follows. 
+```{r}
+# Priors for the random effects
+pcprior.c1 <- list(prec = list(prior="pc.prec", param = c(10*sdres.a,0.01)))
 #Priors for the regression coefficients.
 prior.beta.a <- list(mean.intercept = 4, prec.intercept =  1,
                        mean =0, prec = 5)
@@ -1003,7 +1015,7 @@ results.study.c1 <- inla(formula = log.stroop_test_performance ~ gender+on_a_die
                           alcohol+drugs+sick+other_factors+education+smoke+
                           no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
                           access_greenbluespaces_300mbuff+age_yrs+tmean_24h+
-                           f(Person_ID, model="iid"),
+                           f(Person_ID, model="iid",hyper=pcprior.c1),
                         family="gaussian",
                         control.family=list(hyper=prec.prior),
                         data=study.data.scl, control.fixed=prior.beta.a,
@@ -1012,19 +1024,26 @@ results.study.c1 <- inla(formula = log.stroop_test_performance ~ gender+on_a_die
 summary(results.study.c1)
 ```
 
+Compared with the model in (a), this model with random effects on person ID has regression coefficients generally smaller in absolute value. More specifically, $11$ out of $18$ coefficients are smaller in absolute value. Moreover, the posterior mean of the precision for the Gaussian observations becomes larger, indicating that some of the variance is explained by the random effects introduced. The mean of the precision for Person_ID is $38.75$, which is a relatively clear sign of overdispersion.
+```{r}
+cat("Number of regression coefficients that are larger in absolute value: ",
+sum(abs(results.study.a$summary.fixed$mean)>abs(results.study.c1$summary.fixed$mean)))
+cat("\nThe following covariates have coefficients that become larger than the model without random effects: \n",results.study.a$names.fixed[abs(results.study.a$summary.fixed$mean)>abs(results.study.c1$summary.fixed$mean)])
+cat("\nThe following covariates have coefficients that become smaller than the model without random effects: \n",results.study.a$names.fixed[abs(results.study.a$summary.fixed$mean)<abs(results.study.c1$summary.fixed$mean)])
+```
 
+The summary for the second model after adding the random effects on ID is shown below. The precision for ID is $12.04$, showing a clear sign of overdispersion. As expected, the DIC given by this model is smaller.
 ```{r}
 prior.beta.c2 <- list(mean.intercept = 0, prec.intercept =  1,
                        mean =0, prec = 5)
-
-
+pcprior.c2 <- list(prec = list(prior="pc.prec", param = c(10*sdres.b,0.01)))
 #Fitting the model in INLA
 #"control.fixed=prior.beta" sets regression coeff. priors.
 results.study.c2 <- inla(formula = sadness ~ gender+on_a_diet+
                           alcohol+drugs+sick+other_factors+education+smoke+
                           no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
                           access_greenbluespaces_300mbuff+age_yrs+tmean_24h+
-                          f(Person_ID,model="iid" ),
+                          f(Person_ID,model="iid",hyper = pcprior.c2 ),
                         family="poisson",
                         control.family=list(link="log"),
                         data=study.data.scl, control.fixed=prior.beta.c2,
@@ -1033,8 +1052,14 @@ results.study.c2 <- inla(formula = sadness ~ gender+on_a_diet+
 summary(results.study.c2)
 ```
 
-Explanation (min 300 characters in your own words, otherwise -5 marks
-for insufficient explanation):
+Similarly, we observe many regression coefficients become smaller in absolute value. 
+```{r}
+cat("number of regression coefficients that are larger in absolute value: ",
+sum(abs(results.study.b$summary.fixed$mean)>abs(results.study.c2$summary.fixed$mean)))
+cat("\nThe following covariates have coefficients that become larger than the model without random effects: \n",results.study.b$names.fixed[abs(results.study.b$summary.fixed$mean)>abs(results.study.c2$summary.fixed$mean)])
+cat("\nThe following covariates have coefficients that become smaller than the model without random effects: \n",results.study.b$names.fixed[abs(results.study.b$summary.fixed$mean)<abs(results.study.c2$summary.fixed$mean)])
+```
+
 
 **d)[10 marks] Do posterior predictive checks (i.e. using replicates)
 for the sadness score for your models with or without random effects.
@@ -1045,6 +1070,8 @@ original covariates, and use this to compute the RMSE values for both
 models (i.e. with, or without random effects).**
 
 **Discuss the results.**
+
+We first draw $1000$ samples for each linear predictor of the model, and use each linear predictor as the rate parameter in Poisson distribution to draw the response variable "sadness". Therefore, for each model we get $1766\times 1000$ replication matrix.
 
 ```{r}
 nbsamp <- 1000
@@ -1068,13 +1095,32 @@ for (row.num in 1:n2){
 
 }
 ```
+
+To perform the posterior predictive check, we use the following three test functions:
+
+1. number of people having different sadness scores.
+2. average number of sadness scores among groups with different true sadness scores. 
+
 ```{r}
-sad.post.pred.test <- function(replicates,study.data.scl){
+sad.post.pred.test1 <- function(replicates,study.data.scl){
+  par(mfrow=c(4,4))
+  par(mar=c(1.7,1.7,1.7,1.7))
+  for (i in 1:14){
+    no.sad <- colSums(replicates==i)
+    true.no.sad <- sum(study.data.scl$sadness==i)
+    xmin=min(c(no.sad,true.no.sad))-2
+    xmax=max(c(no.sad,true.no.sad))+2
+    hist(no.sad,col="gray40",main=c("sadness",i),xlim=c(xmin,xmax))
+    abline(v=true.no.sad,col="red",lwd=2)
+  }
+}
+
+sad.post.pred.test2 <- function(replicates,study.data.scl){
   par(mfrow=c(4,4))
   par(mar=c(1.7,1.7,1.7,1.7))
   for (i in 1:14){
     ind.sad <- which(study.data.scl$sadness==i)
-    sad <- replicates[ind.sad,]
+    sad <- colMeans(replicates[ind.sad,])
     xmin=min(c(sad,i))-2
     xmax=max(c(sad,i))+2
     hist(sad,col="gray40",main=c("sadness=",i),xlim=c(xmin,xmax))
@@ -1083,47 +1129,32 @@ sad.post.pred.test <- function(replicates,study.data.scl){
 }
 ```
 
+Below are the results for the test function 1 for the model in (b) on the top block and the model in (c) in the bottom block respectively. We can see that both models have a poor fit for the number of people having sadness score equal to $1,2,4,5,6,7,8,11,12,13,14$, with the value of this function on the dataset being far away from the typical realisations according to the replicates. However, the model in (c) has a smaller discrepancy compared to the model in (b). This indicates that the model without random effects on ID explain the data even worse than the model considering the random effects. For the sadness score equal to $3,9,10$, the two model have satisfactory fit, and note that the results for the model in (c) still looks slightly better than those for the model in (b).
+
 ```{r}
-sad.post.pred.test(yrep.sad.b,study.data.scl)
-sad.post.pred.test(yrep.sad.c,study.data.scl)
+sad.post.pred.test1(yrep.sad.b,study.data.scl)
+sad.post.pred.test1(yrep.sad.c,study.data.scl)
+```
+
+Here are the results for model in (b) on the top block and for the model in (c) on the bottom block using the test function 3. The test results are satisfactory for the group where the sadness score is $6$ and $7$. While the two models show a poor fit for this test function, we notice that the model in (c) is slightly better than the model in (b).
+
+```{r}
+sad.post.pred.test2(yrep.sad.b,study.data.scl)
+
+sad.post.pred.test2(yrep.sad.c,study.data.scl)
+
 ```
 
 
+The root mean squared errors for the two models are computed below. We see a significant improvement of the model in terms of the RMSE if we add random effects of ID to the model.
 ```{r}
-par(mfrow=c(4,4))
-par(mar=c(1.7,1.7,1.7,1.7))
-for (i in 1:14){
-  no.sad <- colSums(yrep.sad.b==i)
-  true.no.sad <- sum(study.data.scl$sadness==i)
-  xmin=min(c(no.sad,true.no.sad))-2
-  xmax=max(c(no.sad,true.no.sad))+2
-  hist(no.sad,col="gray40",main=c("sadness",i),xlim=c(xmin,xmax))
-  abline(v=true.no.sad,col="red",lwd=2)
-}
-```
-
-```{r}
-par(mfrow=c(4,4))
-par(mar=c(1.7,1.7,1.7,1.7))
-for (i in 1:14){
-  no.sad <- colSums(yrep.sad.c==i)
-  true.no.sad <- sum(study.data.scl$sadness==i)
-  xmin=min(c(no.sad,true.no.sad))-2
-  xmax=max(c(no.sad,true.no.sad))+2
-  hist(no.sad,col="gray40",main=c("sadness",i),xlim=c(xmin,xmax))
-  abline(v=true.no.sad,col="red",lwd=2)
-}
-```
-
-The root mean squared errors for the two models are computed below. We see a significant improvement of the model if we add random effects of ID to the model.
-```{r}
-rmse(study.data.scl$sadness,rowMeans(yrep.sad.b))
-rmse(study.data.scl$sadness,rowMeans(yrep.sad.c))
+cat("RMSE for the model in (b):",
+rmse(study.data.scl$sadness,rowMeans(yrep.sad.b)))
+cat("\nRMSE for the model in (c):",
+rmse(study.data.scl$sadness,rowMeans(yrep.sad.c)))
 ```
 
 
-Explanation (min 300 characters in your own words, otherwise -5 marks
-for insufficient explanation):
 
 **e)[10 marks]**
 
@@ -1164,7 +1195,7 @@ study.data.new  <-
 
 ```
 
-The second step is to fit the model using the new dataset.
+The second step is to fit the model using the new dataset. 
 ```{r}
 results.study.a <- inla(formula = log.stroop_test_performance ~ gender+on_a_diet+
                           alcohol+drugs+sick+other_factors+education+smoke+
@@ -1175,10 +1206,22 @@ results.study.a <- inla(formula = log.stroop_test_performance ~ gender+on_a_diet
                         data=study.data.new, control.fixed=prior.beta.a,
                         control.predictor = list(compute = TRUE),
                         control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
-summary(results.study.a)
-```
-After this, we obtain posterior samples for the Predictor variable for this new data point  (located in the first row). The Predictor variables in the sample correspond to the linear predictor ηi in the LGM model. They are not samples from the posterior predictive.
 
+results.study.c2 <- inla(formula = sadness ~ gender+on_a_diet+
+                          alcohol+drugs+sick+other_factors+education+smoke+
+                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
+                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h+
+                          f(Person_ID,model="iid" ),
+                        family="poisson",
+                        control.family=list(link="log"),
+                        data=study.data.new, control.fixed=prior.beta.c2,
+                        control.predictor = list(compute = TRUE,link=1),
+                        control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
+```
+
+After this, we obtain posterior samples for the Predictor variable for this new data point  (located in the first row). The Predictor variables in the sample correspond to the linear predictor in the LGM model. To get the samples of the response, we need to draw from Gaussian/Poisson distribution using the linear predictor samples as mean and sd (/rate for Poisson) parameters. 
+
+In the following, we generate $10000$ posterior predictive samples for the model in (a). For the new data point, the posterior  predictive mean is around $42.9$, the posterior predictive standard deviation is around $9.6$. 
 ```{r}
 nsamp <- 10000
 log.stroop.samples <- inla.posterior.sample(n=nsamp,
@@ -1202,21 +1245,7 @@ cat("The posterior predictive mean for stroop test performance is ",
     sd(exp(ls.post.pred.samples)))
 ```
 
-```{r}
-#Fitting the model in INLA
-#"control.fixed=prior.beta" sets regression coeff. priors.
-results.study.c2 <- inla(formula = sadness ~ gender+on_a_diet+
-                          alcohol+drugs+sick+other_factors+education+smoke+
-                          no2gps_24h+maxwindspeed_24h+precip_24h+sec_noise55_day+
-                          access_greenbluespaces_300mbuff+age_yrs+tmean_24h+
-                          f(Person_ID,model="iid" ),
-                        family="poisson",
-                        control.family=list(link="log"),
-                        data=study.data.new, control.fixed=prior.beta.c2,
-                        control.predictor = list(compute = TRUE,link=1),
-                        control.compute=list(config=TRUE,cpo=TRUE, dic=TRUE))
-summary(results.study.c2)
-```
+Similarly, we get $10000$ posterior predictive samples for the model in (c). For the new data point, the posterior  predictive mean is around $1.46$ and the posterior predictive standard deviation is around $1.25$. The person has the sadness score $1.46$. We can use MAP as the estimate and thus conclude that the person will have a sadness score $2$.
 
 ```{r}
 nsamp <- 10000
@@ -1237,7 +1266,3 @@ cat("The posterior predictive mean for stroop test performance is ",
     "The posterior predictive standard deviation for stroop test performance is ",
     sd(sad.post.pred.samples))
 ```
-
-
-Explanation (min 300 characters in your own words, otherwise -5 marks
-for insufficient explanation):
