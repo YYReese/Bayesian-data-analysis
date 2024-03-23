@@ -1,0 +1,351 @@
+---
+title: "basketball"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(Metrics)
+library(INLA)
+```
+
+The dataset contains data from 20 seasons, but we are going to focus
+on only one, the 2021 season. We only keep games where SEASON is 2021 in the dataset, and remove
+all other seasons. The scores are going to be assumed to follow a linear Gaussian
+model
+
+$$S_g^{H}\sim N(\mu_{g}^{H},\sigma^2), \quad S_g^{A}\sim N(\mu_{g}^{A}, \sigma^2).$$
+
+**Here** $S_g^H$ **denotes the final score of the home team in game**
+$g$**, and** $S^A_g$ **denotes the final score of the away team in
+game** $g$**.**
+
+Note that the true scores can only take non-negative integer values,
+so the Gaussian distribution is not perfect, but it can still be used
+nevertheless. The means for the scores are going to be modeled as a combination of
+three terms: attacking strength, defending ability, and whether the team
+is playing at home, or away. For each team, we denote their attacking
+strength parameter by** $a_{team}$**, their defending strength parameter
+by **$d_{team}$**, and the effect of playing at home as **$h$**. This
+quantifies the effect of playing at home on the expected number of goals
+scored. 
+
+### Model 1
+Our first model is the following (**$\mu_g^{H}$ **is for the goals
+scored by the home team, and is** $\mu_g^{A}$** is for the away team):
+
+$\begin{aligned} \mu_{g}^{H}&= \beta_0+a_{home.team}+d_{away.team}+h\\ \mu_{g}^{A}&= \beta_0+a_{away.team}+d_{home.team} \end{aligned}$
+
+
+We implement the model in INLA, using a similar approach as Question 3
+in Workshop 2. We set the mean and the standard deviation for the prior
+for the intercept based on the mean and standard deviation of the scores
+in 2020. We select mean 0 and standard deviation 10 for the regression
+coefficients. We choose Gamma(0.1,0.1) prior for the precision $\tau$ of
+the Gaussian model, this is a non-informative prior with a spike near
+zero and most of its mass in the [0,3] region.
+
+```{r}
+mean_season_2020=mean(c(games[games$SEASON==2020,]$PTS_away,games[games$SEASON==2020,]$home));
+sd_season_2020=sd(c(games[games$SEASON==2020,]$PTS_away,games[games$SEASON==2020,]$PTS_home));
+games=games[games$SEASON==2021,]
+games=games[order(games$GAME_DATE_EST),]
+HOME_TEAM_NAME<-function(HOME_TEAM_ID){teams$NICKNAME[which(teams$TEAM_ID==HOME_TEAM_ID)]}
+AWAY_TEAM_NAME<-function(AWAY_TEAM_ID){teams$NICKNAME[which(teams$TEAM_ID==AWAY_TEAM_ID)]}
+games$HOME_TEAM<-apply(as.array(games$HOME_TEAM_ID),1,HOME_TEAM_NAME);
+games$AWAY_TEAM<-apply(as.array(games$VISITOR_TEAM_ID),1,AWAY_TEAM_NAME);
+
+y=c(games$PTS_home, games$PTS_away)
+G=nrow(games)
+HT_char=as.character(games$HOME_TEAM)
+AT_char=as.character(games$AWAY_TEAM)
+attack=as.factor(c(HT_char,AT_char))
+defense=as.factor(c(AT_char,HT_char))
+playing.at.home=c(rep(1,G),rep(0,G))
+
+data=data.frame(y,attack,defense,playing.at.home)
+prior.beta <- list(mean.intercept = 110, prec.intercept = 1e-2,
+                    mean = 0, prec = 1e-2)
+prec.prior <- list(prec=list(prior = "loggamma", param = c(0.1, 0.1)))
+
+m1=inla(formula=y~1+attack+defense+playing.at.home, data=data, family="gaussian",
+        control.compute = list(config=TRUE,dic = TRUE,cpo=TRUE),
+        control.family=list(hyper=prec.prior),control.fixed=prior.beta)
+summary(m1)
+```
+
+The model fit indicates that the intercept has mean 105, meaning that
+the typical number of goals per team is close to this, which is
+realistic. The playing.at.home coefficient has mean 2, indicating that
+there is a home advantage of around 2 goals. Timberwolves has the best
+attack (largest value), while Mavericks has the best defense (smallest
+value).
+
+```{r}
+rmse(y, m1$summary.fitted.values$mean)
+```
+
+The RMSE of this model is 11.58484.
+
+We also compute the NLSCPO to compare models (this was not required in
+the question).
+
+```{r}
+m1.nlscpo=-sum(log(m1$cpo$cpo))
+cat("NLSCPO of model 1:",m1.nlscpo,"\n")
+```
+
+### Model 2
+In the above, the model assumed that the home effect is the
+same for each team. In this part, we consider a team-specific home
+effect $h_{home.team}$,
+
+$\begin{aligned} \mu_{g}^{H}&= \beta_0+a_{home.team}+d_{away.team}+h_{home.team}\\ \mu_{g}^{A}&= \beta_0+a_{away.team}+d_{home.team} \end{aligned}$
+
+This team specific home effect can be achieved by using the
+playing.at.home:attack term in place of playing.at.home in the INLA
+formula. We use the same priors as in part a).
+
+```{r}
+prior.beta <- list(mean.intercept = 110, prec.intercept = 1e-2,
+                    mean = 0, prec = 1e-2)
+prec.prior <- list(prec=list(prior = "loggamma", param = c(0.1, 0.1)))
+
+m2=inla(formula=y~1+attack+defense+playing.at.home:attack, data=data,
+        family="gaussian",control.compute = list(config=TRUE, dic = TRUE,cpo=TRUE),      control.family=list(hyper=prec.prior),control.fixed=prior.beta)
+summary(m2)
+
+```
+
+The results indicate that there are significant differences in the home
+effect between teams.
+
+```{r}
+rmse(y, m2$summary.fitted.values$mean)
+```
+
+The RMSE has slightly improved compared to the model in part a).
+
+This was not required, but we also compute the NLSCPO.
+
+```{r}
+m2.nlscpo=-sum(log(m2$cpo$cpo))
+cat("NLSCPO of model 2:",m2.nlscpo,"\n")
+```
+
+The NLSCPO increased compared to the first model, indicating worse
+predictive performance. This could be due to the fact that we have much
+more parameters than in the first model, which can lead to overfitting.
+
+### Model 3
+We compute running averages of the home or away scores by each team that
+happened during the last 200 games among all teams (or less during the
+first 200 games in the season). We include this information about the
+home or away team in the dataframe that is passed to INLA, and include
+it in the formula with scaling. We use the same priors as before.
+
+The posterior mean for the scale(AV_PTS) is 1.36, indicating that teams
+that have a relatively good recent performance tend to score higher in
+the current game too.
+
+```{r}
+rmse(y, m3$summary.fitted.values$mean)
+```
+
+The RMSE is lower than for model 1, showing that including this new
+covariate in the model is useful.
+
+```{r}
+m3.nlscpo=-sum(log(m3$cpo$cpo))
+cat("NLSCPO of model 3:",m3.nlscpo,"\n")
+```
+
+The NLSCPO is better than for both model 1 and model 2, indicating
+that this new covariate helps with improving the predictive performance.
+
+### Posterior predictive checks
+
+We obtain the samples from the linear predictors of the 3 using
+`inla.posterior.sample`. To get the replicate samples, we also add the
+noise terms. As test
+functions, we choose the maximum amongst all scores, the minimum amongst
+all scores, and the mean absolute differences between home and away team
+scores in each game.
+
+```{r}
+
+nbsamp=1000;
+samp<-inla.posterior.sample(nbsamp, m1);
+predictor.samples=inla.posterior.sample.eval(function(...) {Predictor},
+samp)
+sigma.samples=1/sqrt(inla.posterior.sample.eval(function(...) {theta},
+  samp))
+rep_a=matrix(0,nrow=2*G,ncol=nbsamp);
+for(it in 1:(2*G)){
+rep_a[it,]=predictor.samples[it,]+rnorm(nbsamp, mean=0,sd=sigma.samples)
+}
+
+samp<-inla.posterior.sample(nbsamp, m2);
+predictor.samples=inla.posterior.sample.eval(function(...) {Predictor},
+samp)
+sigma.samples=1/sqrt(inla.posterior.sample.eval(function(...) {theta},
+  samp))
+rep_b=matrix(0,nrow=2*G,ncol=nbsamp);
+for(it in 1:(2*G)){
+rep_b[it,]=predictor.samples[it,]+rnorm(nbsamp, mean=0,sd=sigma.samples)
+}
+
+samp<-inla.posterior.sample(nbsamp, m3);
+predictor.samples=inla.posterior.sample.eval(function(...) {Predictor},
+samp)
+sigma.samples=1/sqrt(inla.posterior.sample.eval(function(...) {theta},
+  samp))
+rep_c=matrix(0,nrow=2*G,ncol=nbsamp);
+for(it in 1:(2*G)){
+rep_c[it,]=predictor.samples[it,]+rnorm(nbsamp, mean=0,sd=sigma.samples)
+}
+
+```
+
+```{r}
+
+rep_a_max=apply(rep_a,2,max)
+rep_b_max=apply(rep_b,2,max)
+rep_c_max=apply(rep_c,2,max)
+
+par(mfrow=c(3,1))
+hist(rep_a_max,col="gray40",main="Predictive distribution for max", breaks=15)
+abline(v=max(y),col="red",lwd=2)
+
+hist(rep_b_max,col="gray40",main="Predictive distribution for max", breaks=15)
+abline(v=max(y),col="red",lwd=2)
+
+hist(rep_c_max,col="gray40",main="Predictive distribution for max", breaks=15)
+abline(v=max(y),col="red",lwd=2)
+
+```
+
+```{r}
+rep_a_min=apply(rep_a,2,min)
+rep_b_min=apply(rep_b,2,min)
+rep_c_min=apply(rep_c,2,min)
+
+par(mfrow=c(3,1))
+hist(rep_a_min,col="gray40",main="Predictive distribution for min", breaks=15)
+abline(v=min(y),col="red",lwd=2)
+
+hist(rep_b_min,col="gray40",main="Predictive distribution for min", breaks=15)
+abline(v=min(y),col="red",lwd=2)
+
+hist(rep_c_min,col="gray40",main="Predictive distribution for min", breaks=15)
+abline(v=min(y),col="red",lwd=2)
+```
+
+```{r}
+mean_abs_diff<-function(v){l=length(v)/2; return(mean(abs(v[1:l]-v[(l+1):(2*l)]))); }
+
+rep_a_msd=apply(rep_a,2,mean_abs_diff)
+rep_b_msd=apply(rep_b,2,mean_abs_diff)
+rep_c_msd=apply(rep_c,2,mean_abs_diff)
+
+par(mfrow=c(3,1))
+hist(rep_a_msd,col="gray40",main="Posterior predictive check for mean abs diff", breaks=15,xlim=c(12,16))
+abline(v=mean_abs_diff(y),col="red",lwd=2)
+
+hist(rep_b_msd,col="gray40",main="Posterior predictive check for mean abs diff", breaks=15,xlim=c(12,16))
+abline(v=mean_abs_diff(y),col="red",lwd=2)
+
+hist(rep_c_msd,col="gray40",main="Posterior predictive check for mean abs diff", breaks=15,xlim=c(12,16))
+abline(v=mean_abs_diff(y),col="red",lwd=2)
+```
+
+The first two test functions (min and max) do not seem to detect any
+issues with the model fit. However, the third test function (mean
+absolute difference between home/away team scores) seems to indicate
+that our model tends to have a larger score difference than in reality.
+This could be due to the independent noise assumption between home/away
+team scores, which might not be a good model of reality given the
+competitive nature of basketball.
+
+### Model 4
+In the previous models, we were assuming a model of
+the
+form.**$$S_g^{H}\sim N(\mu_{g}^{H},\sigma^2), \quad S_g^{A}\sim N(\mu_{g}^{A}, \sigma^2).$$** It
+is natural to model these two results jointly with a multivariate
+normal,
+
+$$(S_g^{H}, S_g^{A})\sim N\left(\left(\begin{matrix}\mu_{g}^{H}\\\mu_{g}^{A}\end{matrix}\right),\Sigma\right),$$
+where $\Sigma$ is a 2 times 2 covariance matrix.
+
+We implement this model in INLA using the `iid2d` random effect, which
+allows for having a correlations between pairs of random
+variables, i.e. there are 2\*G random variables in total in G pairs, and
+these G pairs are independent, identically distributed (i.i.d.).
+
+This model has to be
+parameterised in terms of indices $1:2*G$, where the pairs of variables
+are $(1, G+1)$, $(2, G+2)$, etc. This is exactly in the right order in
+our dataset, since the scores of the home team is in the first $G$ rows,
+and the score of the away teams are in the last $G$ rows. Note that the
+Gaussian likelihood also has an independent noise term, which is not
+needed as we model the noise via the random effect. To take this into
+account, the precision of the Gaussian likelihood is set to a very large
+value (10\^6) via the term control.family = list(hyper =
+list(prec=list(initial=log(1e6), fixed=TRUE))). This means that the
+standard deviation is 0.001, so this term is negligibly small, and the
+noise will be instead fitted by the random effect terms.
+
+For the regression coefficients, we use the same priors as before in
+part a). For the random effect, we use the default Wishart 2d prior,
+with parameters (4,1,1,0).
+
+```{r}
+id=1:(2*G);
+data=data.frame(y,attack,defense,playing.at.home,AV_PTS,id);
+
+m4=inla(formula=y~1+attack+defense+playing.at.home+scale(AV_PTS)
+        +f(id, model="iid2d",n=(2*G)), data=data, family="gaussian",
+        control.family = list(hyper = list(prec=list(initial=log(1e6), fixed=TRUE))),
+        control.compute=list(cpo=T, dic=T,config=T), control.fixed=prior.beta)
+summary(m4)
+```
+
+The results show that the correlation between the two components
+(rho1:2) has posterior mean 0.237, indicating that indeed there is a
+positive correlation between the noise terms between home/away score.
+This seems reasonable given the competitive nature of the game.
+
+Now we are going to compute the RMSE. Note that we cannot use the
+previous method for this based on the fitted values,
+
+```{r}
+rmse(y, m4$summary.fitted.values$mean)
+```
+
+This is essentially zero, because the fitted values already include the
+random effect terms, which we use for modelling the noise.
+
+The way for evaluating the predicted values for the scores from our
+model is using the model matrix together with the posterior mean of the
+fixed effect regression coefficients.
+
+```{r}
+predicted.y=as.numeric(m4$model.matrix%*%m4$summary.fixed$mean);
+rmse(y,predicted.y)
+```
+
+As we can see, the RMSE is similar to our previous models.
+
+This was not required, but we also evaluated the NLSCPO.
+
+```{r}
+m4.nlscpo=-sum(log(m4$cpo$cpo))
+cat("NLSCPO of model 4:",m4.nlscpo,"\n")
+```
+
+There is a very significant improvement over earlier models, indicating
+that this model will likely have better predictive performance.
+
