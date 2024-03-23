@@ -1,0 +1,518 @@
+---
+title: "car_insurance"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+In this project, we study a dataset about car insurance. The data
+set is based on one-year vehicle insurance policies taken out in 2004 or
+2005. In total, there are 67856 policies, of which 4624 have claims. The aim is to predict the number of claims using historical data.
+
+```{r Load insurance data}
+require(insuranceData)
+data(dataCar)
+print.data.frame(dataCar[1:6,])
+```
+
+**Description of the columns.**
+
+**veh_value: vehicle value in \$10000s**
+
+**exposure: maximum portion of the vehicle value the insurer may need to
+pay out in case of an incident**
+
+**claimcst0: claim amount (0 if no claim)**
+
+**clm: whether there was a claim during the 1 year duration**
+
+**numclaims: number of claims during the 1 year duration**
+
+**veh_body types: BUS = bus CONVT = convertible COUPE = coupe HBACK =
+hatchback HDTOP = hardtop MCARA = motorized caravan MIBUS = minibus
+PANVN = panel van RDSTR = roadster SEDAN = sedan STNWG = station wagon
+TRUCK = truck UTE = utility**
+
+**gender: F- female, M - male\
+\
+area: a factor with levels A,B,C,D,E, F**
+
+**agecat: age category, 1 (youngest), 2, 3, 4, 5, 6**
+
+## Model 1
+First, we fit a Bayesian logistic regression model on the dataset
+dataCar with clm as response, logit link, and using veh_value, exposure, veh_body, veh_age, gender, area, and
+    agecat as covariates.
+
+The response `clm` is a binary variable, of which is assumed to follow a Bernoulli distribution. With the non-categorical covariates already been standardised, the Bernoulli model is represented as below:
+
+\begin{align*}
+y_i | \theta_i, \mathbf{x}_i & \sim Bernoulli(\theta_i), \quad i = 1,...,n\\
+g(\theta_i) & = \beta_0 + \beta_1 \text{veh\_value}_i + \beta_2 \text{exposure}_i + \beta_3 \text{veh\_body}_i + \beta_4 \text{veh\_age}_i \\ & + \beta_5 \text{gender}_i + \beta_6 \text{area} + \beta_7 \text{agecat} \\
+\beta_j & \sim N(0, \sigma^2_{\beta_j}), \quad j=0,...,7
+\end{align*}
+
+where we have,
+
+$\mathbf{x}_i = [1, \text{veh\_value}_i, \text{exposure}_i, \text{veh\_body}_i, \text{veh\_age}_i, \text{gender}_i, \text{area}_i,\text{agecat}_i]^T$
+
+\begin{align*} g(\theta_i) & = \ln(\frac{\theta_i}{1 - \theta_i}) \\
+& = \eta_i = \beta_0 + \beta_1 \text{veh\_value}_i + \beta_2 \text{exposure}_i + \beta_3 \text{veh\_body}_i + \beta_4 \text{veh\_age}_i + \beta_5 \text{gender}_i + \beta_6 \text{area} + \beta_7 \text{agecat} \end{align*}
+
+* $\beta_0$ is the log odds of the probability of insurance claim for the mean 
+* $\beta_1$ is the log odds-ratio of the probability of insurance claim for a one-unit increase in the vehicle value in $\$ 10000$s.
+* $\beta_2$ is the log odds-ratio of the probability of insurance claim for a one-unit increase in the maximum portion of the vehicle value the insurer may need to pay out in case of an incident.
+* $\beta_3$ is the log odds-ratio of the probability of insurance claim for the corresponding vehicle type.
+* $\beta_4$ is the log odds-ratio of the probability of insurance claim for the corresponding age category of the vehicle.
+* $\beta_5$ is the log odds-ratio of the probability of insurance claim for the particular gender of the driver.
+* $\beta_6$ is the log odds-ratio of the probability of insurance claim for the corresponding area.
+* $\beta_7$ is the log odds-ratio of the probability of insurance claim for the corresponding age category of the driver.
+
+When setting the prior for $\beta$s, we should consider the minimum distance in $\mathbf{x}$, for which we think the change of probability can happen. According to the logistic link function, the interval $[-5,5]$ corresponds approximately to the probabilities of $[0.005,0.995]$. We should ensure that the linear predictor has a large probability of being in the interval $[-5,5]$ by setting the appropriate prior for most observations. We will set the intercept to have a standard deviation of $5$. For each of the regression coefficients, we will first compute the sum of the covariate squares for each row in the dataset by using the model matrix, and then take the $0.05$ quantile. Thus we will have the variance of the regression coefficients as
+
+$$
+\sigma^2_\beta = \frac{1}{0.05 \text{ quantile of sum of covariate squares}}
+$$
+
+This will ensure that the prior variance of the sum of the linear regression terms being below $25$ for $95\%$ of the rows.
+
+```{r }
+# Create a new dataframe for this question 
+# with standardised non-categorical variables
+data.1a <- list(clm = dataCar$clm,
+                veh_value = scale(dataCar$veh_value), 
+                exposure = scale(dataCar$exposure), 
+                veh_body = dataCar$veh_body, 
+                veh_age = factor(dataCar$veh_age),
+                gender = dataCar$gender,
+                area = dataCar$area,
+                agecat = factor(dataCar$agecat)
+                )
+
+# The model matrix 
+mm <- model.matrix(clm ~ 0 + veh_value + exposure + veh_body + veh_age + gender + area + agecat, 
+                   data = data.1a)
+# Obtain the 0.05 quantile of the sum of covariate squares
+var.beta = 25/quantile(rowSums(mm^2),0.05)
+cat("The Variance of the regression coefficients is, ", var.beta, "\n")
+
+# Fit the model in INLA
+model.1a <- inla(clm ~ veh_value + exposure + veh_body + veh_age + gender + area + agecat, 
+                 data = data.1a, 
+                family = "binomial", Ntrials = 1, # Bernoulli
+                control.fixed = list(mean.intercept = 0, prec.intercept = 4e-2,
+                                     mean = 0, prec = 1/var.beta),
+                control.family = list(control.link=list(model="logit")),
+                control.compute = list(dic = TRUE,cpo=TRUE,config=TRUE),
+                control.predictor = list(link = 1, compute=TRUE)
+                )
+
+# Summary statistic of the model 
+summary(model.1a)
+```
+
+```{r }
+# Define the inverse logit funciton 
+ilogit <- function(x) {
+  1/(1+exp(-x))
+}
+
+# In order to interpret the regression coefficients better
+ilogit(model.1a$summary.fixed)
+```
+
+By taking the inverse logit of the regression coefficients, we can interpret the results better, which has done as above. On average, there is $16.7\%$ probability that there are claim(s) during the one year duration. Observe that if the vehicle value and the maximum portion of the vehicle value the insurer cover increase by one unit, the probability of having a claim has decreased by $49.1\%$ and $36.8\%$ respectively. 
+
+By comparing each of the categorical variables, the following increase the probability of having a claim by the highest amount:
+
+* if it is a bus (since all other type of vehicle has $<1$)
+* if at the first vehicle age category (since all other categories of vehicle age has $<1$)
+* if the driver is female
+* if the area is in category A (since all other categories of area has $<1$)
+* if the driver is at the first age category (since all other type of vehicle has $<1$)
+
+Now, we will test for the sensitivity of the model by trying a different prior (randomly selected the variation of $10$ for both the intercept and regression coefficients). From the result below, the values of coefficients and their standard deviation do not change much, hence we could say the model is not very sensitive to the choice of prior. 
+
+```{r }
+# Try a different prior choice for sensitivity check
+model.1a.new <- inla(clm ~ veh_value + exposure + veh_body + veh_age + gender + area + agecat, 
+                     data = data.1a, 
+                family = "binomial", Ntrials = 1, # Bernoulli
+                control.fixed = list(mean.intercept = 0, prec.intercept = 0.1,
+                                     mean = 0, prec = 0.1),
+                control.family = list(control.link=list(model="logit")),
+                control.compute = list(dic = TRUE,cpo=TRUE,config=TRUE),
+                control.predictor = list(link = 1, compute=TRUE)
+                )
+
+summary(model.1a.new)
+```
+
+
+### Model 2
+Now, we fit a Bayesian Poisson regression model on numclaims as
+response with log link, using veh_value, exposure, veh_body, veh_age, gender, area, and agecat as covariates. The response `numclaims` is a count variable, of which is assumed to follow a Poisson distribution. With the non-categorical covariates already been standardised, the Poisson model is represented as below:
+
+\begin{align*}
+y_i | \mu_i, \mathbf{x}_i \sim & Poisson(\mu_i), \quad i = 1,...,n\\
+g(\mu_i) = & \beta_0 + \beta_1 \text{veh\_value}_i + \beta_2 \text{exposure}_i + \beta_3 \text{veh\_body}_i + \beta_4 \text{veh\_age}_i \\ & + \beta_5 \text{gender}_i + \beta_6 \text{area} + \beta_7 \text{agecat} \\
+\beta_j \sim & N(0, \sigma^2_{\beta_j}), \quad j=0,...,7
+\end{align*}
+
+where we have,
+
+$\mathbf{x}_i = [1, \text{veh\_value}_i, \text{exposure}_i, \text{veh\_body}_i, \text{veh\_age}_i, \text{gender}_i, \text{area}_i,\text{agecat}_i]^T$
+\begin{align*} g(\mu_i) & = \log(\mu_i) \\
+& = \eta_i = \beta_0 + \beta_1 \text{veh\_value}_i + \beta_2 \text{exposure}_i + \beta_3 \text{veh\_body}_i + \beta_4 \text{veh\_age}_i + \beta_5 \text{gender}_i + \beta_6 \text{area} + \beta_7 \text{agecat} \end{align*}
+Or equivalently, $\mu_i = \exp(\eta_i)$
+
+Note that, we can also write,
+
+$$
+\lambda_i = \exp(\beta_0 + \beta_1 \text{veh\_value}_i + \beta_2 \text{exposure}_i + \beta_3 \text{veh\_body}_i + \beta_4 \text{veh\_age}_i + \beta_5 \text{gender}_i + \beta_6 \text{area} + \beta_7 \text{agecat})
+$$
+
+$\beta_0$ determines the expected value of $y_i$ for a typical case ($\mathbf{x}_i = \bar{\mathbf{x}}$), with a log-link function, we have $\mu_{\bar{\mathbf{x}}} = \exp(\beta_0)$. So to determine its prior, note that the typical values of number of insurance claims is $0$ to $4$, we aim to be uninformative by giving high probability density for the induced variable $\mu_{\bar{\mathbf{x}}} = \exp(\beta_0)$ on the interval $[1/4,4]$ and surroundings, which is equivalently $[-\ln(4), \ln(4)]$ for $\beta_0$. Thus, we will set the prior for the intercept, with the mean of $0$ and variance $\ln(4)^2$
+
+Thus, we have, 
+
+\begin{align*}
+\mu_i = & \mu_{\bar{\mathbf{x}}} \exp(\beta_1 \text{veh\_value}_i) \exp(\beta_2 \text{exposure}_i) \exp(\beta_3 \text{veh\_body}_i) \exp(\beta_4 \text{veh\_age}_i) \\ & \exp(\beta_5 \text{gender}_i) \exp(\beta_6 \text{area}) \exp(\beta_7 \text{agecat}) \\
+= & \mu_{\bar{\mathbf{x}}} \varphi_{\text{veh\_value};i} \varphi_{\text{exposure};i} \varphi_{\text{veh\_body};i} \varphi_{\text{veh\_age};i} \varphi_{\text{gender};i} \varphi_{\text{area};i} \varphi_{\text{agecat};i} 
+\end{align*}
+
+Each of the $\beta_i$'s for $i=1,...7$ and their corresponding variable determine a factor $\varphi_{\cdot;i}$ that indicates, for any case $i$, how many times larger $\mu_i$ is with respects of $\mu_{\bar{\mathbf{x}}}$. We will set an uninformative prior with mean $0$ and variance $100$ for all these $\beta_i$'s.
+
+```{r }
+# Create a new dataframe
+# with standardised non-categorical variables
+data.1b <- list(numclaims = dataCar$numclaims,
+                veh_value = scale(dataCar$veh_value), 
+                exposure = scale(dataCar$exposure), 
+                veh_body = dataCar$veh_body, 
+                veh_age = factor(dataCar$veh_age),
+                gender = dataCar$gender,
+                area = dataCar$area,
+                agecat = factor(dataCar$agecat)
+                )
+
+# Fit the model in INLA
+model.1b <- inla(numclaims ~ veh_value + exposure + veh_body + veh_age + gender + area + agecat, 
+                 data = data.1b, 
+                family = "poisson",
+                control.fixed = list(mean.intercept = 0, prec.intercept = 1/(2*log(4)), 
+                                     mean = 0, prec = 0.01),
+                control.family = list(control.link=list(model="log")),
+                control.compute = list(dic = TRUE,cpo=TRUE,config=TRUE),
+                control.predictor = list(link = 1, compute=TRUE)
+                )
+
+# Summary statistic of the model 
+summary(model.1b)
+```
+
+```{r }
+# In order to interpret the regression coefficients better
+exp(model.1b$summary.fixed)
+```
+
+By taking the exponential of the regression coefficients, we can interpret the results better, which has done as above. On average, there is no claim (rounded up from $0.22$) during the one year duration. Observe that each additional unit in the vehicle value and the maximum portion of the vehicle value the insurer cover are associated with an increase in the claim rate by a factor of $1.03$ and $1.68$ respectively. 
+
+By comparing each of the categorical variables, the following increases the claim rate by the highest value:
+
+* if it is a bus (since all other type of vehicle has $<1$)
+* if at the second vehicle age category 
+* if the driver is female
+* if the area is in category F
+* if the driver is at the first age category (since all other type of vehicle has $<1$)
+
+Now, we will test for the sensitivity of the model by trying a different prior (randomly selected the variation of $10$ for both the intercept and regression coefficients). From the result below, the values of coefficients and their standard deviation do not change much, hence we could say the model is not very sensitive to the choice of prior. 
+
+```{r }
+# Try a different prior choice for sensitivity check
+model.1b.new <- inla(numclaims ~ veh_value + exposure + veh_body + veh_age + gender + area + agecat, 
+                     data = data.1b, 
+                family = "poisson",
+                control.fixed = list(mean.intercept = 0, prec.intercept = 0.1, 
+                                     mean = 0, prec = 0.1),
+                control.family = list(control.link=list(model="log")),
+                control.compute = list(dic = TRUE,cpo=TRUE,config=TRUE),
+                control.predictor = list(link = 1, compute=TRUE)
+                )
+
+summary(model.1b.new)
+```
+
+### Model 3 -- Zero-inflated Bayesian Poisson regression
+
+We fit a zero-inflated Bayesian Poisson regression model on numclaims with log link function, using veh_value, exposure, veh_body, veh_age, gender, area, and
+    agecat as covariates.
+
+The definition of the model 3 is the same as model 2, except that this time we will be implementing zero-inflated model. Notice that many cases have zero claims, and to model the excess zeros in addition to allowing for over-dispersion. A zero-inflated model can be expressed as 
+
+$$
+Y_i \sim \begin{cases} 0 & \quad \text{with probability } \phi \\ g(Y_i | \mathbf{x}_i) & \quad \text{with probability } 1-\phi \end{cases}
+$$
+
+where $g(\cdot)$ is a certain probability mass function, in this case it will be Poisson. We will model the count data with excess zeros using "Type 1" zero-inflated Poisson model (a mixture of two process: one generates $0$ and one governed by a regular Poisson distribution), which is the likelihood as, 
+
+$$
+p(Y_i = y_i | \mathbf{x}_i) = \phi \cdot I_{\{y_i = 0\}} + (1 - \phi) \cdot g(y_i | \mathbf{x}_i)
+$$
+
+We will use the same prior settings as in model 1.
+
+```{r }
+# Using the same dataframe as in model 1
+# Using the same priors as in model 2
+
+# Fit the model in INLA
+model.1c <- inla(numclaims ~ veh_value + exposure + veh_body + veh_age + gender + area + agecat, 
+                 data = data.1b, 
+                family = "zeroinflatedpoisson1",
+                control.fixed = list(mean.intercept = 0, prec.intercept = 1/(2*log(4)), 
+                                     mean = 0, prec = 0.01),
+                control.family = list(control.link=list(model="log")),
+                control.compute = list(dic = TRUE,cpo=TRUE,config=TRUE),
+                control.predictor = list(link = 1, compute=TRUE)
+                )
+
+# Summary statistic of the model 
+summary(model.1c)
+```
+
+```{r Q1c convert coefficients}
+# In order to interpret the regression coefficients better
+exp(model.1c$summary.fixed)
+```
+
+By taking the exponential of the regression coefficients, we can interpret the results better, which has done as above. On average, there is no claim (rounded up from $0.30$, a slightly higher value from model 2 during the one year duration. Observe that each additional unit in the vehicle value and the maximum portion of the vehicle value the insurer cover are associated with an increase in the claim rate by a factor of $1.03$ and $1.69$ respectively, which is the same as the last model (up to one decimal place)
+
+This model agrees with all the bullet points outlined for model 2. However, by comparing the DIC value for the two, we found that this model is a better model with $34753.80$ (whereas model 2 has $34788.95$).
+
+Now, we will test for the sensitivity of the model by trying a different prior (randomly selected the variation of $10$ for both the intercept and regression coefficients). From the result below, the values of coefficients and their standard deviation do not change much, hence we could say the model is not very sensitive to the choice of prior. 
+
+```{r }
+# Try a different prior choice for sensitivity check
+model.1c.new <- inla(numclaims ~ veh_value + exposure + veh_body + veh_age + gender + area + agecat, 
+                     data = data.1b, 
+                family = "zeroinflatedpoisson1", 
+                control.fixed = list(mean.intercept = 0, prec.intercept = 0.1, 
+                                     mean = 0, prec = 0.1),
+                control.family = list(control.link=list(model="log")),
+                control.compute = list(dic = TRUE,cpo=TRUE,config=TRUE),
+                control.predictor = list(link = 1, compute=TRUE)
+                )
+
+summary(model.1c.new)
+```
+
+## Model 4 
+
+In this part, we fit a new model on numclaims in terms of the same
+covariates to improve model 3 by considering
+interactions between covariates, as well as random effects.
+Note that introducing interactions between covariates one by one does not guarantee improvement continuously as the interaction effect does not have the additive property, and that the random effect from covariates may not be significant in improving the model, even though we may thought the introduction is logical. After a few round of experimenting with different combinations of interacting covariates and with different random effect implemented, we found that the *interaction between the vehicle value and the maximum portion of the vehicle value the insurer may cover* and the random effect from variable *area* improve the model. It makes sense that the *vehicle value* and the *maximum portion of the vehicle value the insurer may cover* may introduce some interaction effect into the number of claims, and how the number of claims may vary randomly across different areas.
+
+```{r }
+# Fit the model in INLA, with
+model.1d <- inla(numclaims ~ veh_value*exposure + veh_body + veh_age + gender +
+                   f(area, model="iid", hyper = list(prec = list(param = c(0.01, 0.01)))) + agecat, 
+                data = data.1b, 
+                family = "zeroinflatedpoisson1", 
+                control.fixed = list(mean.intercept = 0, prec.intercept = 1/(2*log(4)), 
+                                     mean = 0, prec = 0.01),
+                control.family = list(control.link=list(model="log")),
+                control.compute = list(dic = TRUE,cpo=TRUE,config=TRUE),
+                control.predictor = list(link = 1, compute=TRUE)
+                )
+
+# Summary statistic of the model
+summary(model.1d)
+```
+
+```{r}
+sigma.area <- function(tau){sqrt(1/tau)}
+model.1d$marginals.hyperpar$`Precision for area` %>% 
+  inla.tmarginal(fun = sigma.area) %>% 
+  inla.zmarginal()
+```
+
+```{r}
+exp(model.1d$summary.fixed)
+```
+
+By taking the exponential of the regression coefficients, we can interpret the results better, which has done as above. On average, there is no claim (rounded up from $0.31$) during the one year duration. Observe that each additional unit in the vehicle value and the maximum portion of the vehicle value the insurer cover are associated with an increase in the claim rate by a factor of $1.01$ and $1.69$ respectively, which is quite close as the previous two models.
+
+This model agrees with all the bullet points outlined for model 2 and model 3, except that the effect of `area` cannot be interpreted as before, but we can conclude that the random effects from `area` are identified with high precision. By comparing the DIC value for the two, we found that this model is the best model out of all three models implemented, with $34747.03$ (whereas model 2 and 3 has $34788.95$ and $34753.80$ respectively).
+
+Now, we will test for the sensitivity of the model by trying a different prior (randomly selected the variation of $10$ for both the intercept and regression coefficients). From the result below, the values of coefficients and their standard deviation do not change much, hence we could say the posterior mean of the parameters are not very sensitive to the choice of prior. Though, it indicates that the random effects from `area` are identified with ever higher precision.
+
+```{r Q1d}
+# Try a different prior choice for sensitivity check
+model.1d.new <- inla(numclaims ~ veh_value*exposure + veh_body + veh_age + gender +
+                   f(area, model="iid", hyper = list(prec = list(param = c(0.1, 0.1)))) + agecat, 
+                data = data.1b, 
+                family = "zeroinflatedpoisson1", 
+                control.fixed = list(mean.intercept = 0, prec.intercept = 0.1, 
+                                     mean = 0, prec = 0.1),
+                control.family = list(control.link=list(model="log")),
+                control.compute = list(dic = TRUE,cpo=TRUE,config=TRUE),
+                control.predictor = list(link = 1, compute=TRUE)
+                )
+
+summary(model.1d.new)
+```
+
+## Posterior predictive model checks 
+
+To do the posterior predictive checks, we will check the range of typical values for the replicates, with test functions being the number of rows in the dataset with `numclaims` equal 0, 1, 2, 3, and 4. To validate the fit of the model, we will also compute the RMSE values for all three models.
+
+```{r}
+# Pre-define the total rows for each number of claims
+numclaims0 <- length(which(dataCar$numclaims == 0))
+numclaims1 <- length(which(dataCar$numclaims == 1))
+numclaims2 <- length(which(dataCar$numclaims == 2))
+numclaims3 <- length(which(dataCar$numclaims == 3))
+numclaims4 <- length(which(dataCar$numclaims == 4))
+```
+
+```{r }
+# For model2
+nbsamp <- 500
+n <- nrow(dataCar)
+
+# Generate samples 
+model.1b.samples <- inla.posterior.sample(n=nbsamp, result = model.1b)
+predictor.1b.samples <- inla.posterior.sample.eval(function(...) {Predictor}, model.1b.samples)
+
+# Obtain lambdas by taking the exponential of the predictors
+lambda.samples <- exp(predictor.1b.samples)
+# Stimulate the number of claims for each lambda
+numclaims.sim <- apply(lambda.samples, 2, function(x) rpois(n, x))
+  
+# Compute and print the RMSE of the model 
+rmse <- mean(apply(numclaims.sim, 2, function(x) rmse(dataCar$numclaims, x)))
+cat("The RMSE of the model is, ", rmse)
+  
+numclaims.bin <- apply(numclaims.sim, 2, function(x) tabulate(x+1, nbins = 5))
+
+par(mfrow=c(2,3))
+hist(numclaims.bin[1,], col="gray40", main = "numclaims=0")
+abline(v = numclaims0, col = "red", lwd=2)
+
+hist(numclaims.bin[2,], col="gray40", main = "numclaims=1")
+abline(v = numclaims1, col = "red", lwd=2)
+
+hist(numclaims.bin[3,], 
+     xlim = c(min(numclaims.bin[3,]), numclaims2), 
+     col="gray40", main = "numclaims=2")
+abline(v = numclaims2, col = "red", lwd=2)
+
+hist(numclaims.bin[4,], col="gray40", main = "numclaims=3")
+abline(v = numclaims3, col = "red", lwd=2)
+
+hist(numclaims.bin[5,], col="gray40", main = "numclaims=4")
+abline(v = numclaims4, col = "red", lwd=2)
+```
+
+```{r }
+# For model 3
+nbsamp <- 500
+n <- nrow(dataCar)
+
+# Generate samples 
+model.1c.samples <- inla.posterior.sample(n=nbsamp, result = model.1c)
+predictor.1c.samples <- inla.posterior.sample.eval(function(...) {Predictor}, model.1c.samples)
+
+# Extract the zero-probability parameter for zero-inflated poisson 
+p <- c()
+for (i in 1:500) {
+  p <- append(p, model.1c.samples[[i]]$hyperpar[1])
+}
+
+# Obtain lambdas by taking the exponential of the predictors
+lambda.samples <- exp(predictor.1c.samples)
+# Stimulate the number of claims for each lambda
+numclaims.sim <- t(do.call(rbind, Map(function(x, p) rzipois(n, x, pi = p), 
+                                      split(lambda.samples,col(lambda.samples)), p)))
+  
+# Compute and print the RMSE of the model 
+rmse <- mean(apply(numclaims.sim, 2, function(x) rmse(dataCar$numclaims, x)))
+cat("The RMSE of the model is, ", rmse)
+  
+numclaims.bin <- apply(numclaims.sim, 2, function(x) tabulate(x+1, nbins = 5))
+
+par(mfrow=c(2,3))
+hist(numclaims.bin[1,], col="gray40", main = "numclaims=0")
+abline(v = numclaims0, col = "red", lwd=2)
+
+hist(numclaims.bin[2,], col="gray40", main = "numclaims=1")
+abline(v = numclaims1, col = "red", lwd=2)
+
+hist(numclaims.bin[3,], col="gray40", main = "numclaims=2")
+abline(v = numclaims2, col = "red", lwd=2)
+
+hist(numclaims.bin[4,], col="gray40", main = "numclaims=3")
+abline(v = numclaims3, col = "red", lwd=2)
+
+hist(numclaims.bin[5,], col="gray40", main = "numclaims=4")
+abline(v = numclaims4, col = "red", lwd=2)
+```
+
+```{r }
+# For model 4
+nbsamp <- 500
+n <- nrow(dataCar)
+
+# Generate samples 
+model.1d.samples <- inla.posterior.sample(n=nbsamp, result = model.1d)
+predictor.1d.samples <- inla.posterior.sample.eval(function(...) {Predictor}, model.1d.samples)
+
+# Extract the zero-probability parameter for zero-inflated poisson 
+p <- c()
+for (i in 1:500) {
+  p <- append(p, model.1d.samples[[i]]$hyperpar[1])
+}
+
+# Obtain lambdas by taking the exponential of the predictors
+lambda.samples <- exp(predictor.1d.samples)
+# Stimulate the number of claims for each lambda
+numclaims.sim <- t(do.call(rbind, Map(function(x, p) rzipois(n, x, pi = p), 
+                                      split(lambda.samples,col(lambda.samples)), p)))
+  
+# Compute and print the RMSE of the model 
+rmse <- mean(apply(numclaims.sim, 2, function(x) rmse(dataCar$numclaims, x)))
+cat("The RMSE of the model is, ", rmse)
+  
+numclaims.bin <- apply(numclaims.sim, 2, function(x) tabulate(x+1, nbins = 5))
+
+par(mfrow=c(2,3))
+hist(numclaims.bin[1,], col="gray40", main = "numclaims=0")
+abline(v = numclaims0, col = "red", lwd=2)
+
+hist(numclaims.bin[2,], col="gray40", main = "numclaims=1")
+abline(v = numclaims1, col = "red", lwd=2)
+
+hist(numclaims.bin[3,], col="gray40", main = "numclaims=2")
+abline(v = numclaims2, col = "red", lwd=2)
+
+hist(numclaims.bin[4,], col="gray40", main = "numclaims=3")
+abline(v = numclaims3, col = "red", lwd=2)
+
+hist(numclaims.bin[5,], col="gray40", main = "numclaims=4")
+abline(v = numclaims4, col = "red", lwd=2)
+```
+
+For model 2, the test function for `numclaims=2,3,4` suggests that the model tends to have smaller number of cases with 2-4 claims than in reality. For both the model 3 and 4, all test functions do not seem to indicate any issues with the model fit, since the the original observed data is within the typical range of the replicate data. 
+
+By comparing their RMSE, model 2 is surprisingly a more accurate model with $0.3854148$, whereas model 3 and 4 have a RMSE of $0.3895052$ and $0.3896472$ respectively. Though the difference is not very significantly large, this contradicts the comparisons of their results with the five test functions and their DICs, which have suggested that model 3 and 4 are better than model 2. 
+
+However, note that the DIC also takes measure of the complexity and the uncertainty of the model, and since model 3 and 4 perform better with all five test functions, we would conclude that model 2 is the best model fit out of three (as it has the smallest DIC and lower RMSE). 
+
+(Note that there is some randomness in generating samples from INLA models, but the values of RMSE computed each time only differ by very small amount and that the model 3 sometimes has a lower RMSE instead.)
+
+
