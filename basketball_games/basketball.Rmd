@@ -19,9 +19,9 @@ model
 
 $$S_g^{H}\sim N(\mu_{g}^{H},\sigma^2), \quad S_g^{A}\sim N(\mu_{g}^{A}, \sigma^2).$$
 
-**Here** $S_g^H$ **denotes the final score of the home team in game**
-$g$**, and** $S^A_g$ **denotes the final score of the away team in
-game** $g$**.**
+Here $S_g^H$ denotes the final score of the home team in game
+$g$, and $S^A_g$ denotes the final score of the away team in
+game $g$.
 
 Note that the true scores can only take non-negative integer values,
 so the Gaussian distribution is not perfect, but it can still be used
